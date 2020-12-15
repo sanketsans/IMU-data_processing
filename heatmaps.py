@@ -34,7 +34,7 @@ else:
 
     df = pd.DataFrame({ key:pd.Series(value) for key, value in panda_data.items()}).T
     df.columns =['Gaze_Pt_1', 'Gaze_Pt_2', 'Gaze_Pt_3', 'Gaze_Pt_4']
-    df.to_csv('file.csv')
+    # df.to_csv('file.csv')
 
 df = df.T
 # frame = cv2.resize(frame, (240, 360), interpolation = cv2.INTER_AREA)
@@ -50,7 +50,7 @@ for i in range(length):
                 (x, y) = pt
                 # pt = pt.strip('()')     ## 1315 frame, no gaze point ## 1298
                 # (x, y) = tuple(map(float, pt.split(', ')))
-                image = cv2.circle(frame, (int(x*frame.shape[0]),int(y*frame.shape[1])), radius=8, color=(0, 0, 255), thickness=10)
+                image = cv2.circle(frame, (int(x*frame.shape[1]),int(y*frame.shape[0])), radius=8, color=(0, 0, 255), thickness=10)
         print(coordinate)
         cv2.imshow('image', image)
         cv2.waitKey(0)
