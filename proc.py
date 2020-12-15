@@ -5,7 +5,7 @@ import sys
 import math
 import numpy as np
 sys.path.append('../')
-from Pavis_Social_Interaction_Attention_dataset import helpers, variables
+from gaze_data import helpers, variables
 
 utils = helpers.Helpers()
 var = variables.Variables()
@@ -13,7 +13,7 @@ nT, oT = 1.9, 1.9
 roll, pitch = [], [] ## angle at which head moves vertically(roll)
 folder = sys.argv[1]
 
-dataset_folder = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
+dataset_folder = '/home/sans/Downloads/gaze_data/'
 # os.chdir(dataset_folder)
 os.chdir(dataset_folder + folder + '/' if folder[-1]!='/' else (dataset_folder + folder))
 fig = plt.figure()
