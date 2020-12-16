@@ -7,7 +7,7 @@ import cv2
 from pathlib import Path
 import seaborn as sns
 sys.path.append('../')
-from Pavis_Social_Interaction_Attention_dataset import helpers, variables, proc
+from gaze_data import helpers, variables, proc
 
 panda_data = {}
 

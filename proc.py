@@ -4,16 +4,16 @@ import matplotlib.pyplot as plt
 import sys
 import math
 import numpy as np
+from pathlib import Path
 sys.path.append('../')
-from Pavis_Social_Interaction_Attention_dataset import helpers, variables
+from gaze_data import helpers, variables
 
 utils = helpers.Helpers()
 var = variables.Variables()
 nT, oT = 1.9, 1.9
 roll, pitch = [], [] ## angle at which head moves vertically(roll)
 folder = sys.argv[1]
-
-dataset_folder = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
+dataset_folder = '/home/sans/Downloads/gaze_data/'
 # dataset_folder = '/home/sans/Downloads/gaze_data/'
 # os.chdir(dataset_folder)
 os.chdir(dataset_folder + folder + '/' if folder[-1]!='/' else (dataset_folder + folder))
@@ -25,29 +25,32 @@ try:
 except:
     pass
 
-with open('gazedata') as f:
-    for jsonObj in f:
-        studentDict = json.loads(jsonObj)
-        var.gaze_dataList.append(studentDict)
+if Path('file.csv').is_file():
+    print('File exists')
+else:
+    with open('gazedata') as f:
+        for jsonObj in f:
+            studentDict = json.loads(jsonObj)
+            var.gaze_dataList.append(studentDict)
 
-# oldList = []
-for data in var.gaze_dataList:
-    try:
-        if(float(data['timestamp']) > 0.000000000 and float(data['timestamp']) < 600.0):
-            nT = utils.floor(data['timestamp'])
-            diff = round(nT - oT, 2)
-            var.gaze_data[0].append(data['data']['gaze2d'][0])
-            var.gaze_data[1].append(data['data']['gaze2d'][1])
+    # oldList = []
+    for data in var.gaze_dataList:
+        try:
+            if(float(data['timestamp']) > 0.000000000 and float(data['timestamp']) < 600.0):
+                nT = utils.floor(data['timestamp'])
+                diff = round(nT - oT, 2)
+                var.gaze_data[0].append(data['data']['gaze2d'][0])
+                var.gaze_data[1].append(data['data']['gaze2d'][1])
+                var.timestamps_gaze.append(nT)
+                var.n_gaze_samples += 1
+                oT = nT
+                # oldList = data
+        except Exception as e:
+            # pass
+            # print(data['timestamp'], e)
             var.timestamps_gaze.append(nT)
-            var.n_gaze_samples += 1
-            oT = nT
-            # oldList = data
-    except Exception as e:
-        # pass
-        # print(data['timestamp'], e)
-        var.timestamps_gaze.append(nT)
-        var.gaze_data[0].append(0.0)
-        var.gaze_data[1].append(0.0)
+            var.gaze_data[0].append(0.0)
+            var.gaze_data[1].append(0.0)
 
 with open('imudata') as f:
     for jsonObj in f:
