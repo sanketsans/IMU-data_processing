@@ -2,7 +2,7 @@ class Variables:
     def __init__(self):
         self.gaze_dataList = []     ## list to handle data with multiple single element json items.
         self.timestamps_gaze = []   ## timestamp of data
-        self.gaze_data = [[], []]   ## 2D co-ordinates of gaze2D
+        self.gaze_data = [[], []]   ## 2D co-ordinates of gaze2D; (x,y)
         self.n_gaze_samples = 0     ## number of samples for corresponding sec.
         self.gaze_data_index = 0    ## used to print the timestamp
 
