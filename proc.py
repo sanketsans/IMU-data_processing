@@ -5,7 +5,7 @@ import sys
 import math
 import numpy as np
 sys.path.append('../')
-from gaze_data import helpers, variables
+from Pavis_Social_Interaction_Attention_dataset import helpers, variables
 
 utils = helpers.Helpers()
 var = variables.Variables()
@@ -13,7 +13,8 @@ nT, oT = 1.9, 1.9
 roll, pitch = [], [] ## angle at which head moves vertically(roll)
 folder = sys.argv[1]
 
-dataset_folder = '/home/sans/Downloads/gaze_data/'
+dataset_folder = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
+# dataset_folder = '/home/sans/Downloads/gaze_data/'
 # os.chdir(dataset_folder)
 os.chdir(dataset_folder + folder + '/' if folder[-1]!='/' else (dataset_folder + folder))
 fig = plt.figure()
@@ -32,10 +33,9 @@ with open('gazedata') as f:
 # oldList = []
 for data in var.gaze_dataList:
     try:
-        if(float(data['timestamp']) > 6.000000000 and float(data['timestamp']) < 600.0):
+        if(float(data['timestamp']) > 0.000000000 and float(data['timestamp']) < 600.0):
             nT = utils.floor(data['timestamp'])
             diff = round(nT - oT, 2)
-
             var.gaze_data[0].append(data['data']['gaze2d'][0])
             var.gaze_data[1].append(data['data']['gaze2d'][1])
             var.timestamps_gaze.append(nT)
@@ -57,7 +57,7 @@ with open('imudata') as f:
 oT, nT = 0.0, 0.0
 for data in var.imu_dataList:
     try:
-        if(float(data['timestamp']) > 5.000 and float(data['timestamp']) < 600.00):
+        if(float(data['timestamp']) > 0.000 and float(data['timestamp']) < 600.00):
             nT = utils.floor(data['timestamp'])
             diff = round((nT - oT), 2)
             # print(diff, round((nT-oT), 2))
