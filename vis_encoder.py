@@ -15,9 +15,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     ## load model without batch norm
     net = FlowNetS.FlowNetS(args, input_channels=6, batchNorm=False)
-    # net = nn.Sequential(*net)
-    # net = list(net.children())[0:9]
-    # newFlowNet = nn.Sequential(*net)
+    
     dict = torch.load("/home/sans/Downloads/gaze_data/FlowNet2-S_checkpoint.pth.tar")
     net.load_state_dict(dict["state_dict"])
     newNet = nn.Sequential(*list(net.children())[0:9])
