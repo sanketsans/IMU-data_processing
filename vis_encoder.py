@@ -8,14 +8,16 @@ import argparse
 import cv2, sys, os
 from flownet2.networks import FlowNetS
 sys.path.append('../')
-from gaze_data import getDataset
+from getDataset import ImageDataset
+from variables import RootVariables
 
 if __name__ == "__main__":
     BATCH_SIZE = 1
     INPUT_CHANNELS = 6
     BATCH_NORM = False
+    var = RootVariables()
 
-    dataset = getDataset.ImageDataset('BookShelf_S1/')
+    dataset = ImageDataset(var.root, 'BookShelf_S1/')
     trainLoader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE)
     a = iter(trainLoader)
     imgs = next(a)
@@ -26,7 +28,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     ## load model without batch norm
-    checkpoint_path = "/home/sans/Downloads/gaze_data/FlowNet2-S_checkpoint.pth.tar"
+    checkpoint_path = var.root + "FlowNet2-S_checkpoint.pth.tar"
     net = FlowNetS.FlowNetS(args, INPUT_CHANNELS, BATCH_NORM)
     dict = torch.load(checkpoint_path)
     net.load_state_dict(dict["state_dict"])

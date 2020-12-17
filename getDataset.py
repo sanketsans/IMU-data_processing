@@ -5,10 +5,12 @@ import pandas as pd
 import sys, ast
 import numpy as np
 import cv2
+sys.path.append('../')
+from variables import Variables
 
 class IMUDataset(Dataset):
-    def __init__(self, rootfolder, device=None):
-        self.root = '/home/sans/Downloads/gaze_data/'
+    def __init__(self, root, rootfolder, device=None):
+        self.root = root
         self.rootfolder = rootfolder
         self.path = self.root + self.rootfolder  + '/' if self.rootfolder[-1]!='/' else (self.root + self.rootfolder)
         self.data = pd.read_csv(self.path + 'imu_file.csv').T
@@ -32,8 +34,8 @@ class IMUDataset(Dataset):
         return (np.array(data_pts))
 
 class ImageDataset(Dataset):
-    def __init__(self, rootfolder, video_file='scenevideo.mp4', device=None):
-        self.root = '/home/sans/Downloads/gaze_data/'
+    def __init__(self, root, rootfolder, video_file='scenevideo.mp4', device=None):
+        self.root = root
         self.rootfolder = rootfolder
         self.path = self.root + self.rootfolder  + '/' if self.rootfolder[-1]!='/' else (self.root + self.rootfolder)
         self.video_file = self.path + video_file
@@ -54,3 +56,8 @@ class ImageDataset(Dataset):
         # print(stack_frame.shape)
 
         return stack_frame
+
+if __name__ == "__main__":
+
+    var = Variables()
+    print(var.root)

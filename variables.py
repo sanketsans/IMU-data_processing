@@ -1,5 +1,6 @@
 class Variables:
     def __init__(self):
+        self.root = '/home/sans/Downloads/gaze_data/'
         self.gaze_dataList = []     ## list to handle data with multiple single element json items.
         self.timestamps_gaze = []   ## timestamp of data
         self.gaze_data = [[], []]   ## 2D co-ordinates of gaze2D; (x,y)
@@ -12,6 +13,10 @@ class Variables:
         self.imu_data_gyro = [[], [], []]
         self.n_imu_samples = 0
         self.check_repeat = False   ## to check if repeation
+
+class RootVariables:
+    def __init__(self):
+        self.root = '/home/sans/Downloads/gaze_data/'
 
 if __name__ =='__main__':
     var = Variables()

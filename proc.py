@@ -6,14 +6,15 @@ import math
 import numpy as np
 from pathlib import Path
 sys.path.append('../')
-from gaze_data import helpers, variables
+from helpers import Helpers
+from variables import Variables
 
-utils = helpers.Helpers()
-var = variables.Variables()
+utils = Helpers()
+var = Variables()
 nT, oT = 1.9, 1.9
 
 folder = sys.argv[1]
-dataset_folder = '/home/sans/Downloads/gaze_data/'
+dataset_folder = var.root
 # dataset_folder = '/home/sans/Downloads/gaze_data/'
 # os.chdir(dataset_folder)
 os.chdir(dataset_folder + folder + '/' if folder[-1]!='/' else (dataset_folder + folder))

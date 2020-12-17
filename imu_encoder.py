@@ -5,8 +5,8 @@ import pandas as pd
 import numpy as np
 import sys, os, ast
 sys.path.append('../')
-from gaze_data import getDataset
-
+from getDataset import IMUDataset
+from variables import RootVariables
 
 input_size = 6
 hidden_size = 128
@@ -39,7 +39,8 @@ class BILSTM(nn.Module):
 # os.chdir(dataset_folder + folder + '/' if folder[-1]!='/' else (dataset_folder + folder))
 BATCH_SIZE = 1
 folder = sys.argv[1]
-dataset = getDataset.IMUDataset(folder)
+var = RootVariables()
+dataset = IMUDataset(var.root, folder)
 trainLoader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE)
 a = iter(trainLoader)
 data = next(a)
