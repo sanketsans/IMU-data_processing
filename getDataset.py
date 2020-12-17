@@ -1,8 +1,10 @@
 import torch
 from torch.utils.data import Dataset
+from torchvision import transforms
 import pandas as pd
 import sys, ast
 import numpy as np
+import cv2
 
 class IMUDataset(Dataset):
     def __init__(self, rootfolder, device=None):
@@ -27,12 +29,28 @@ class IMUDataset(Dataset):
             except Exception as e:
                 print(e)
 
-        return np.transpose(np.array(data_pts))
+        return (np.array(data_pts))
 
-BATCH_SIZE = 1
-folder = sys.argv[1]
-dataset = IMUDataset(folder)
-trainLoader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE)
-a = iter(trainLoader)
-data = next(a)
-print(data.shape, data)
+class ImageDataset(Dataset):
+    def __init__(self, rootfolder, video_file='scenevideo.mp4', device=None):
+        self.root = '/home/sans/Downloads/gaze_data/'
+        self.rootfolder = rootfolder
+        self.path = self.root + self.rootfolder  + '/' if self.rootfolder[-1]!='/' else (self.root + self.rootfolder)
+        self.video_file = self.path + video_file
+
+        self.capture = cv2.VideoCapture(self.video_file)
+        self.ret, self.frame = self.capture.read()         ## FRAME 1
+        self.transforms = transforms.Compose([transforms.ToTensor()])
+
+    def __len__(self):
+        return 1
+
+    def __getitem__(self, index):
+        if self.ret == True:
+            ret, frame2 = self.capture.read()
+
+        stack_frame = np.concatenate((self.frame, frame2), axis=2)
+        stack_frame = self.transforms(stack_frame)
+        # print(stack_frame.shape)
+
+        return stack_frame

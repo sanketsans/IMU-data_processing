@@ -4,12 +4,16 @@ import torch.nn.functional as F
 import pandas as pd
 import numpy as np
 import sys, os, ast
-# sys.path.append('../')
+sys.path.append('../')
+from gaze_data import getDataset
+
 
 input_size = 6
 hidden_size = 128
 num_layers = 2
 sequence_size = 4
+num_classes = 128
+device = torch.device("cpu")
 
 class BILSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, num_classes):
@@ -30,21 +34,18 @@ class BILSTM(nn.Module):
         return out
 
 ## PREPARING THE DATA
+# folder = sys.argv[1]
+# dataset_folder = '/home/sans/Downloads/gaze_data/'
+# os.chdir(dataset_folder + folder + '/' if folder[-1]!='/' else (dataset_folder + folder))
+BATCH_SIZE = 1
 folder = sys.argv[1]
-dataset_folder = '/home/sans/Downloads/gaze_data/'
-os.chdir(dataset_folder + folder + '/' if folder[-1]!='/' else (dataset_folder + folder))
+dataset = getDataset.IMUDataset(folder)
+trainLoader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE)
+a = iter(trainLoader)
+data = next(a)
+# print(data.shape, data)
+print(data.shape)
 
-df_imu = pd.read_csv('imu_file.csv').T
-
-data_pts = df_imu.iloc[:, 10]
-for index, data in enumerate(data_pts):
-    try:
-        (acc, gyro) = ast.literal_eval(data)
-        data_pt = np.array(acc + gyro)
-        data_pt[1] += 9.80665
-        data_pt = np.round(data_pt, 3)
-        # data_pt = data_pt.reshape(6, 1)
-        # print(acc[1] + 9.8)
-        print(data_pt, data_pt.shape )
-    except Exception as e:
-        print(e)
+model = BILSTM(input_size, hidden_size, num_layers, num_classes).to(device)
+scores = model(data.float())
+print(model, scores.shape)
