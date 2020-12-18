@@ -3,8 +3,8 @@ import torch.nn as nn
 import cv2
 import torch
 import argparse
-from imu_encoder import IMU_ENCODER
-from vis_encoder import VIS_ENCODER
+from encoder_imu import IMU_ENCODER
+from encoder_vis import VIS_ENCODER
 from gaze_plotter import GET_DATAFRAME_FILES
 from getDataset import IMUDataset, ImageDataset
 from variables import RootVariables
@@ -38,7 +38,6 @@ class FusionPipeline:
         imu_dataset = IMUDataset(self.var.root, self.rootfolder)
         imu_trainLoader = torch.utils.data.DataLoader(imu_dataset, batch_size=self.var.batch_size)
 
-
         return imu_trainLoader, frame_trainLoader
 
     def get_encoder_params(self, imu_BatchData, frame_BatchData):
@@ -64,7 +63,7 @@ class FusionPipeline:
 
 
 if __name__ == "__main__":
-    folder = 'BookShelf_S1/'
+    # folder = 'imu_BookShelf_S1/'
     var = RootVariables()
     parser = argparse.ArgumentParser()
     parser.add_argument('--fp16', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
@@ -73,12 +72,16 @@ if __name__ == "__main__":
 
     checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
     pipeline = FusionPipeline(var, args, checkpoint)
-    imu_trainLoader, frame_trainLoader = pipeline.get_dataset_dataloader(folder)
-    a = iter(imu_trainLoader)
-    imuData = next(a)
-    b = iter(frame_trainLoader)
-    frameData = next(b)
-    imu_params, frame_params = pipeline.get_encoder_params(imuData, frameData)
-    print(imu_params, imu_params.shape, frame_params.shape)
-    fused = pipeline.get_fusion_params(imu_params, frame_params)
-    print(fused, fused.shape)
+    for subDir in os.listdir(var.root):
+        if 'imu_' in subDir:
+            print(subDir)
+            folder = subDir
+            imu_trainLoader, frame_trainLoader = pipeline.get_dataset_dataloader(folder)
+            a = iter(imu_trainLoader)
+            imuData = next(a)
+            b = iter(frame_trainLoader)
+            frameData = next(b)
+            imu_params, frame_params = pipeline.get_encoder_params(imuData, frameData)
+            print(imu_params.shape, frame_params.shape)
+            fused = pipeline.get_fusion_params(imu_params, frame_params)
+            print(fused.shape)
