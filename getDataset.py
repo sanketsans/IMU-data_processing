@@ -5,6 +5,7 @@ import pandas as pd
 import sys, ast
 import numpy as np
 import cv2
+from tqdm import tqdm
 sys.path.append('../')
 from variables import Variables
 
@@ -37,25 +38,35 @@ class ImageDataset(Dataset):
     def __init__(self, root, rootfolder, video_file='scenevideo.mp4', device=None):
         self.root = root
         self.rootfolder = rootfolder
+        self.stack_frames = []
         self.path = self.root + self.rootfolder  + '/' if self.rootfolder[-1]!='/' else (self.root + self.rootfolder)
         self.video_file = self.path + video_file
 
         self.capture = cv2.VideoCapture(self.video_file)
-        self.ret, self.frame = self.capture.read()         ## FRAME 1
+        self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.ret, self.first_frame = self.capture.read()         ## FRAME 1
         self.transforms = transforms.Compose([transforms.ToTensor()])
 
     def __len__(self):
         return 1
 
+    def populate_data(self, last_frame):
+        for frame_num in tqdm(range(self.frame_count - 1), desc="Building frame dataset"):
+            if self.ret == True:
+                self.ret, new_frame = self.capture.read()
+
+                stack_frame = np.concatenate((last_frame, new_frame), axis=2)
+                stack_frame = self.transforms(stack_frame)
+                # print(stack_frame.shape)
+                self.stack_frames.append(stack_frame)
+
+                last_frame = new_frame
+            else:
+                break
+
     def __getitem__(self, index):
-        if self.ret == True:
-            ret, frame2 = self.capture.read()
 
-        stack_frame = np.concatenate((self.frame, frame2), axis=2)
-        stack_frame = self.transforms(stack_frame)
-        # print(stack_frame.shape)
-
-        return stack_frame
+        return self.stack_frames[index]
 
 if __name__ == "__main__":
 
