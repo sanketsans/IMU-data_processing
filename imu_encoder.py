@@ -20,8 +20,8 @@ class IMU_ENCODER(nn.Module):
         self.fc = nn.Linear(hidden_size*2, num_classes)
 
     def forward(self, x):
-        h0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(device)
-        c0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(device)
+        h0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size)
+        c0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size)
 
         out, _ = self.lstm(x, (h0, c0))
         out = self.fc(out[:, -1, :])

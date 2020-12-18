@@ -47,17 +47,19 @@ class ImageDataset(Dataset):
         self.ret, self.first_frame = self.capture.read()         ## FRAME 1
         self.transforms = transforms.Compose([transforms.ToTensor()])
 
+        # transforms.ToPILImage(),transforms.Resize((512, 512)),
+
     def __len__(self):
         return 1
 
     def populate_data(self, last_frame):
-        for frame_num in tqdm(range(self.frame_count - 1), desc="Building frame dataset"):
+        last_frame = cv2.resize(last_frame, (512, 512))
+        for frame_num in tqdm(range(10), desc="Building frame dataset"):
             if self.ret == True:
                 self.ret, new_frame = self.capture.read()
-
+                new_frame = cv2.resize(new_frame, (512, 512))
                 stack_frame = np.concatenate((last_frame, new_frame), axis=2)
                 stack_frame = self.transforms(stack_frame)
-                # print(stack_frame.shape)
                 self.stack_frames.append(stack_frame)
 
                 last_frame = new_frame
