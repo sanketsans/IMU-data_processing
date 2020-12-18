@@ -9,107 +9,121 @@ sys.path.append('../')
 from helpers import Helpers
 from variables import Variables
 
-utils = Helpers()
-var = Variables()
-nT, oT = 1.9, 1.9
-
-folder = sys.argv[1]
-dataset_folder = var.root
-# dataset_folder = '/home/sans/Downloads/gaze_data/'
-# os.chdir(dataset_folder)
-os.chdir(dataset_folder + folder + '/' if folder[-1]!='/' else (dataset_folder + folder))
-fig = plt.figure()
-
-try:
-    os.system('gunzip ' + 'gazedata.gz')
-    os.system('gunzip ' + 'imudata.gz')
-except:
-    pass
-
-if Path('gaze_file.csv').is_file():
-    print('File exists')
-else:
-    with open('gazedata') as f:
-        for jsonObj in f:
-            studentDict = json.loads(jsonObj)
-            var.gaze_dataList.append(studentDict)
-
-    ### GAZE DATA
-    for data in var.gaze_dataList:
+class BUILDING_DATASET:
+    def __init__(self):
+        self.utils = Helpers()
+        self.var = Variables()
         try:
-            if(float(data['timestamp']) > 0.000000000 and float(data['timestamp']) < 600.0):
-                nT = utils.floor(data['timestamp'])
-                diff = round(nT - oT, 2)
-                var.gaze_data[0].append(data['data']['gaze2d'][0])
-                var.gaze_data[1].append(data['data']['gaze2d'][1])
-                var.timestamps_gaze.append(nT)
-                var.n_gaze_samples += 1
-                oT = nT
-        except Exception as e:
-            var.timestamps_gaze.append(nT)
-            var.gaze_data[0].append(0.0)
-            var.gaze_data[1].append(0.0)
-
-    with open('imudata') as f:
-        for jsonObj in f:
-            studentDict = json.loads(jsonObj)
-            var.imu_dataList.append(studentDict)
-
-    oT, nT = 0.0, 0.0
-    ## IMU DATA
-    for data in var.imu_dataList:
-        try:
-            if(float(data['timestamp']) > 0.000 and float(data['timestamp']) < 600.00):
-                nT = utils.floor(data['timestamp'])
-                diff = round((nT - oT), 2)
-                # print(nT)
-                # print(diff, round((nT-oT), 2))
-                var.imu_data_acc[0].append(data['data']['accelerometer'][0])
-                var.imu_data_acc[1].append(data['data']['accelerometer'][1])
-                var.imu_data_acc[2].append(data['data']['accelerometer'][2])
-
-                var.imu_data_gyro[0].append(data['data']['gyroscope'][0])
-                var.imu_data_gyro[1].append(data['data']['gyroscope'][1])
-                var.imu_data_gyro[2].append(data['data']['gyroscope'][2])
-
-                var.timestamps_imu.append(nT)
-                if (diff <= 0.01 and var.check_repeat==True):
-                    utils.get_average_remove_dup(var.imu_data_acc[0], -2, -3)
-                    utils.get_average_remove_dup(var.imu_data_acc[1], -2, -3)
-                    utils.get_average_remove_dup(var.imu_data_acc[2], -2, -3)
-
-                    utils.get_average_remove_dup(var.imu_data_gyro[0], -2, -3)
-                    utils.get_average_remove_dup(var.imu_data_gyro[1], -2, -3)
-                    utils.get_average_remove_dup(var.imu_data_gyro[2], -2, -3)
-
-                    var.timestamps_imu.pop(len(var.timestamps_imu) - 3)
-                    # print('Mid point resolved')
-
-                    var.n_imu_samples -= 1
-                    var.check_repeat = False
-                    try:
-                        # if nT < 1.00 :
-                        print('rmv dup', utils.floor(var.timestamps_gaze[var.gaze_data_index]), var.timestamps_imu[-1], diff)
-                        var.gaze_data_index += 1
-                    except:
-                        print(utils.floor(var.timestamps_gaze[var.gaze_data_index-1]),utils.floor(var.timestamps_imu[-1]))
-                elif (diff < 0.01):
-                    var.check_repeat = True
-                    # print('var.check_repeat is true now')
-                else:
-                    try:
-                        # if nT < 1.00:
-                        print(utils.floor(var.timestamps_gaze[var.gaze_data_index]), var.timestamps_imu[-1], diff)
-                        var.gaze_data_index += 1
-                    except:
-                        print(utils.floor(var.timestamps_gaze[var.gaze_data_index-1]),utils.floor(var.timestamps_imu[-1]))
-                var.n_imu_samples += 1
-                oT = nT
+            os.system('gunzip gazedata.gz')
+            os.system('gunzip imudata.gz')
         except Exception as e:
             pass
-            # print(e, 'Hello', data)
+            # print(e)
+        with open('gazedata') as f:
+            for jsonObj in f:
+                studentDict = json.loads(jsonObj)
+                self.var.gaze_dataList.append(studentDict)
 
-    print('IMU samples: {}, Gaze samples: {}'.format(var.n_imu_samples, var.n_gaze_samples))
+        with open('imudata') as f:
+            for jsonObj in f:
+                studentDict = json.loads(jsonObj)
+                self.var.imu_dataList.append(studentDict)
+
+
+    def POP_GAZE_DATA(self, return_val=False):
+        ### GAZE DATA
+        nT, oT = 1.9, 1.9
+        for data in self.var.gaze_dataList:
+            try:
+                if(float(data['timestamp']) > 0.000000000 and float(data['timestamp']) < 600.0):
+                    nT = self.utils.floor(data['timestamp'])
+                    diff = round(nT - oT, 2)
+                    self.var.gaze_data[0].append(data['data']['gaze2d'][0])
+                    self.var.gaze_data[1].append(data['data']['gaze2d'][1])
+                    self.var.timestamps_gaze.append(nT)
+                    self.var.n_gaze_samples += 1
+                    oT = nT
+            except Exception as e:
+                self.var.timestamps_gaze.append(nT)
+                self.var.gaze_data[0].append(0.0)
+                self.var.gaze_data[1].append(0.0)
+
+        if return_val:
+            return self.utils.get_sample_rate(self.var.timestamps_gaze)
+
+    def POP_IMU_DATA(self, return_val=False):
+        nT, oT = 0.0, 0.0
+
+        for data in self.var.imu_dataList:
+            try:
+                if(float(data['timestamp']) > 0.000 and float(data['timestamp']) < 600.00):
+                    nT = self.utils.floor(data['timestamp'])
+                    diff = round((nT - oT), 2)
+                    # print(nT)
+                    # print(diff, round((nT-oT), 2))
+                    self.var.imu_data_acc[0].append(data['data']['accelerometer'][0])
+                    self.var.imu_data_acc[1].append(data['data']['accelerometer'][1])
+                    self.var.imu_data_acc[2].append(data['data']['accelerometer'][2])
+
+                    self.var.imu_data_gyro[0].append(data['data']['gyroscope'][0])
+                    self.var.imu_data_gyro[1].append(data['data']['gyroscope'][1])
+                    self.var.imu_data_gyro[2].append(data['data']['gyroscope'][2])
+
+                    self.var.timestamps_imu.append(nT)
+                    if (diff <= 0.01 and self.var.check_repeat==True):
+                        self.utils.get_average_remove_dup(self.var.imu_data_acc[0], -2, -3)
+                        self.utils.get_average_remove_dup(self.var.imu_data_acc[1], -2, -3)
+                        self.utils.get_average_remove_dup(self.var.imu_data_acc[2], -2, -3)
+
+                        self.utils.get_average_remove_dup(self.var.imu_data_gyro[0], -2, -3)
+                        self.utils.get_average_remove_dup(self.var.imu_data_gyro[1], -2, -3)
+                        self.utils.get_average_remove_dup(self.var.imu_data_gyro[2], -2, -3)
+
+                        self.var.timestamps_imu.pop(len(self.var.timestamps_imu) - 3)
+                        # print('Mid point resolved')
+
+                        self.var.n_imu_samples -= 1
+                        self.var.check_repeat = False
+                        # try:
+                        #     # if nT < 1.00 :
+                        #     print('rmv dup', utils.floor(self.var.timestamps_gaze[self.var.gaze_data_index]), self.var.timestamps_imu[-1], diff)
+                        #     self.var.gaze_data_index += 1
+                        # except:
+                        #     print(utils.floor(self.var.timestamps_gaze[self.var.gaze_data_index-1]),utils.floor(self.var.timestamps_imu[-1]))
+                    elif (diff < 0.01):
+                        self.var.check_repeat = True
+                        # print('var.check_repeat is true now')
+                    else:
+                        pass
+                        # try:
+                        #     # if nT < 1.00 :
+                        #     print('rmv dup', utils.floor(self.var.timestamps_gaze[self.var.gaze_data_index]), self.var.timestamps_imu[-1], diff)
+                        #     self.var.gaze_data_index += 1
+                        # except:
+                        #     print(utils.floor(self.var.timestamps_gaze[self.var.gaze_data_index-1]),utils.floor(self.var.timestamps_imu[-1]))
+                    self.var.n_imu_samples += 1
+                    oT = nT
+            except Exception as e:
+                pass
+
+        if return_val:
+            return self.utils.get_sample_rate(self.var.timestamps_imu)
+                #############################
+
+if __name__ == "__main__":
+    folder = sys.argv[1]
+    dataset_folder = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
+    # os.chdir(dataset_folder)
+    os.chdir(dataset_folder + folder + '/' if folder[-1]!='/' else (dataset_folder + folder))
+    dataset = BUILDING_DATASET()
+    if Path('gaze_file.csv').is_file():
+        print('File exists')
+    else:
+
+        print(dataset.POP_GAZE_DATA())
+        print(dataset.POP_IMU_DATA())
+        print('IMU samples: {}, Gaze samples: {}'.format(dataset.var.n_imu_samples, dataset.var.n_gaze_samples))
+    # fig = plt.figure()
 
 # print(utils.get_sample_rate(var.timestamps_imu), len(var.timestamps_imu))
 # print(utils.get_sample_rate(var.timestamps_gaze), len(var.timestamps_gaze))
