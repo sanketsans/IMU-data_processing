@@ -1,5 +1,6 @@
-import sys
+import sys, os
 import torch.nn as nn
+import cv2
 import torch
 import argparse
 from imu_encoder import IMU_ENCODER
@@ -25,13 +26,18 @@ class FusionPipeline:
 
     def get_dataset_dataloader(self, folder):
         self.rootfolder = folder
-        imu_dataset = IMUDataset(self.var.root, self.rootfolder)
-        imu_trainLoader = torch.utils.data.DataLoader(imu_dataset, batch_size=self.var.batch_size)
+        os.chdir(self.var.root + self.rootfolder)
 
         frame_dataset = ImageDataset(self.var.root, self.rootfolder)
         frame_dataset.populate_data(frame_dataset.first_frame)
         # torch.save(self.frame_dataset.stack_frames, self.var.root + self.rootfolder + 'stack_frames.pt')
         frame_trainLoader = torch.utils.data.DataLoader(frame_dataset, batch_size=self.var.batch_size)
+
+        self.frame_count = int(frame_dataset.capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        get_dataframes = GET_DATAFRAME_FILES(self.frame_count)
+        imu_dataset = IMUDataset(self.var.root, self.rootfolder)
+        imu_trainLoader = torch.utils.data.DataLoader(imu_dataset, batch_size=self.var.batch_size)
+
 
         return imu_trainLoader, frame_trainLoader
 

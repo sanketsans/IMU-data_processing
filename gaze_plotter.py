@@ -10,7 +10,7 @@ sys.path.append('../')
 from proc import BUILDING_DATASET
 
 class GET_DATAFRAME_FILES:
-    def __init__(self):
+    def __init__(self, frame_count):
         self.dataset = BUILDING_DATASET()
         self.panda_data = {}
         if Path('gaze_file.csv').is_file():
@@ -21,7 +21,7 @@ class GET_DATAFRAME_FILES:
         else:
             start_index = 0
             self.dataset.POP_GAZE_DATA()
-            for sec in range(length):
+            for sec in range(frame_count):
                 self.panda_data[sec] = list(zip(self.dataset.var.gaze_data[0][start_index:start_index + 4], self.dataset.var.gaze_data[1][start_index:start_index+4]))
                 start_index += 4
 
@@ -33,7 +33,7 @@ class GET_DATAFRAME_FILES:
             ## GAZE DATAFRAME
             start_index = 0
             self.dataset.POP_IMU_DATA()
-            for sec in range(length):
+            for sec in range(frame_count):
                 self.panda_data[sec] = list(tuple((sec, sec+2)))
                 self.panda_data[sec] = list(zip(zip(self.dataset.var.imu_data_acc[0][start_index:start_index+4],
                                             self.dataset.var.imu_data_acc[1][start_index:start_index+4],
@@ -65,13 +65,13 @@ if __name__ == "__main__":
 
     video_file = 'scenevideo.mp4'
     capture = cv2.VideoCapture(video_file)
-    length = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+    frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = capture.get(cv2.CAP_PROP_FPS)
-    print(length, fps)
+    print(frame_count, fps)
     ret, frame = capture.read()
     print(frame.shape)
 
-    dataframes = GET_DATAFRAME_FILES()
+    dataframes = GET_DATAFRAME_FILES(frame_count)
     df_gaze = dataframes.get_gaze_dataframe()
     df_imu = dataframes.get_imu_dataframe()
 

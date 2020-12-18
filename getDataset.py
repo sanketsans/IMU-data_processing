@@ -58,6 +58,7 @@ class ImageDataset(Dataset):
             if self.ret == True:
                 self.ret, new_frame = self.capture.read()
                 new_frame = cv2.resize(new_frame, (512, 512))
+                # cv2.imwrite('frame%d.png'.format(frame_num), new_frame)
                 stack_frame = np.concatenate((last_frame, new_frame), axis=2)
                 stack_frame = self.transforms(stack_frame)
                 self.stack_frames.append(stack_frame)
