@@ -28,7 +28,7 @@ class FusionPipeline:
         self.rootfolder = folder
         os.chdir(self.var.root + self.rootfolder)
 
-        frame_dataset = ImageDataset(self.var.root, self.rootfolder)
+        frame_dataset = ImageDataset(self.var.root, self.rootfolder, device=self.device)
         frame_dataset.populate_data(frame_dataset.first_frame)
         # torch.save(self.frame_dataset.stack_frames, self.var.root + self.rootfolder + 'stack_frames.pt')
         frame_trainLoader = torch.utils.data.DataLoader(frame_dataset, batch_size=self.var.batch_size)

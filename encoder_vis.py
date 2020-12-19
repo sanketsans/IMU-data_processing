@@ -34,8 +34,9 @@ class VIS_ENCODER:
 if __name__ == "__main__":
     var = RootVariables()
     device = torch.device("cpu")
-    dataset = ImageDataset(var.root, 'imu_BookShelf_S1/')
+    dataset = ImageDataset(var.root, 'imu_BookShelf_S1/', device)
     dataset.populate_data(dataset.first_frame)
+    print(var.batch_size, len(dataset))
     trainLoader = torch.utils.data.DataLoader(dataset, batch_size=var.batch_size)
     a = iter(trainLoader)
     imgs = next(a)

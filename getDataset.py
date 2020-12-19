@@ -35,10 +35,11 @@ class IMUDataset(Dataset):
         return (np.array(data_pts))
 
 class ImageDataset(Dataset):
-    def __init__(self, root, rootfolder, video_file='scenevideo.mp4', device=None):
+    def __init__(self, root, rootfolder, device, video_file='scenevideo.mp4'):
         self.root = root
         self.rootfolder = rootfolder
         self.stack_frames = []
+        self.device = device
         self.path = self.root + self.rootfolder  + '/' if self.rootfolder[-1]!='/' else (self.root + self.rootfolder)
         self.video_file = self.path + video_file
 
@@ -50,7 +51,7 @@ class ImageDataset(Dataset):
         # transforms.ToPILImage(),transforms.Resize((512, 512)),
 
     def __len__(self):
-        return 1
+        return len(self.stack_frames)
 
     def populate_data(self, last_frame):
         last_frame = cv2.resize(last_frame, (512, 512))
@@ -69,7 +70,7 @@ class ImageDataset(Dataset):
 
     def __getitem__(self, index):
 
-        return self.stack_frames[index]
+        return self.stack_frames[index].to(self.device)
 
 if __name__ == "__main__":
 
