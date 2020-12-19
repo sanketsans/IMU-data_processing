@@ -14,8 +14,8 @@ class BUILDING_DATASET:
         self.utils = Helpers()
         self.var = Variables()
         try:
-            os.system('gunzip gazedata.gz')
-            os.system('gunzip imudata.gz')
+            g = os.system('gunzip gazedata.gz')
+            i = os.system('gunzip imudata.gz')
         except Exception as e:
             pass
             # print(e)

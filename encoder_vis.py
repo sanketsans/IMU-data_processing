@@ -34,20 +34,23 @@ class VIS_ENCODER:
 if __name__ == "__main__":
     var = RootVariables()
     device = torch.device("cpu")
-    dataset = ImageDataset(var.root, 'imu_BookShelf_S1/', device)
-    dataset.populate_data(dataset.first_frame)
+    folder = 'imu_BookShelf_S1/'
+    os.chdir(var.root + folder)
+    dataset = ImageDataset(var.root, folder, device)
+    dataset.populate_data(dataset.first_frame, 0)
     print(var.batch_size, len(dataset))
     trainLoader = torch.utils.data.DataLoader(dataset, batch_size=var.batch_size)
     a = iter(trainLoader)
-    imgs = next(a)
-    print(imgs.shape)
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--fp16', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
-    parser.add_argument("--rgb_max", type=float, default=255.)
-
-    args = parser.parse_args()
-    ## load model without batch norm
-    checkpoint_path = var.root + "FlowNet2-S_checkpoint.pth.tar"
-
-    img_enc = VIS_ENCODER(args, checkpoint_path, device)
-    output = img_enc.run_model(imgs)
+    imgs, gaze_pts = next(a)
+    print(imgs.shape, gaze_pts.shape)
+    print(gaze_pts)
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--fp16', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
+    # parser.add_argument("--rgb_max", type=float, default=255.)
+    #
+    # args = parser.parse_args()
+    # ## load model without batch norm
+    # checkpoint_path = var.root + "FlowNet2-S_checkpoint.pth.tar"
+    #
+    # img_enc = VIS_ENCODER(args, checkpoint_path, device)
+    # output = img_enc.run_model(imgs)

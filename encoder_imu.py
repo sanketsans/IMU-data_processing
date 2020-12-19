@@ -40,8 +40,13 @@ if __name__ == "__main__":
     a = iter(trainLoader)
     data = next(a)
     # print(data.shape, data)
+    print(data[0])
     print(data.shape) # [batch_size, sequence_length, input_size]
 
     model = IMU_ENCODER(var.input_size, var.hidden_size, var.num_layers, var.num_classes).to(device)
     scores = model(data.float())
     print(model, scores.shape)
+    scores = scores.unsqueeze(dim = 1)
+    newscore = scores.reshape(scores.shape[0], 4, 32)
+    print(newscore.shape)
+    print(newscore)
