@@ -87,7 +87,7 @@ class ImageDataset(Dataset):
 
                 frame_index += 1
                 new_gaze_pt = self.get_gaze_pts_per_frame(frame_index)
-                self.gaze_pts_stack.append(np.array(tuple(map(tuple, np.array([last_gaze_pt, new_gaze_pt])))))
+                self.gaze_pts_stack.append(np.array([last_gaze_pt, new_gaze_pt]))
 
                 last_gaze_pt = new_gaze_pt
             else:
