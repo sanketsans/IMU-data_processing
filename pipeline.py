@@ -7,7 +7,7 @@ import argparse
 from encoder_imu import IMU_ENCODER
 from encoder_vis import VIS_ENCODER
 from gaze_plotter import GET_DATAFRAME_FILES
-from getDataset import IMUDataset, ImageDataset
+from getDataset import FRAME_IMU_DATASET
 from variables import RootVariables
 
 class FusionPipeline:
@@ -38,17 +38,12 @@ class FusionPipeline:
         self.rootfolder = folder
         os.chdir(self.var.root + self.rootfolder)
 
-        frame_dataset = ImageDataset(self.var.root, self.rootfolder, device=self.device)
-        frame_dataset.populate_data(frame_dataset.first_frame, 0)
-        # torch.save(self.frame_dataset.stack_frames, self.var.root + self.rootfolder + 'stack_frames.pt')
-        frame_trainLoader = torch.utils.data.DataLoader(frame_dataset, batch_size=self.var.batch_size)
+        frame_imu_dataset = FRAME_IMU_DATASET(self.var.root, self.rootfolder, device=self.device)
+        frame_imu_dataset.populate_data(frame_imu_dataset.first_frame, 0)
+        # torch.save(frame_imu_dataset.stack_frames, self.var.root + self.rootfolder + 'stack_frames.pt')
+        frame_imu_dataLoader = torch.utils.data.DataLoader(frame_imu_dataset, batch_size=self.var.batch_size)
 
-        # self.frame_count = int(frame_dataset.capture.get(cv2.CAP_PROP_FRAME_COUNT))
-        # get_dataframes = GET_DATAFRAME_FILES(self.frame_count)
-        imu_dataset = IMUDataset(self.var.root, self.rootfolder)
-        imu_trainLoader = torch.utils.data.DataLoader(imu_dataset, batch_size=self.var.batch_size)
-
-        return imu_trainLoader, frame_trainLoader
+        return frame_imu_dataLoader
 
     def get_encoder_params(self, imu_BatchData, frame_BatchData):
         imu_encoder_params = self.imuModel(imu_BatchData.float())
@@ -73,11 +68,9 @@ class FusionPipeline:
         regOut_1 = F.relu(self.fc1(tempOut))
         regOut_2 = F.relu(self.fc2(regOut_1))
         gaze_pred = self.activation(self.fc3(regOut_2))
-        print(newParams.shape, gaze_pred.shape)
+        # print(newParams.shape, gaze_pred.shape)
 
         return gaze_pred
-
-
 
 
 if __name__ == "__main__":
@@ -94,18 +87,16 @@ if __name__ == "__main__":
         if 'imu_' in subDir:
             print(subDir)
             folder = subDir
-            imu_trainLoader, frame_trainLoader = pipeline.get_dataset_dataloader(folder)
-            a = iter(imu_trainLoader)
-            imuData = next(a)
-            b = iter(frame_trainLoader)
-            frameData, gaze_data = next(b)
-            imu_params, frame_params = pipeline.get_encoder_params(imuData, frameData)
-            print(imu_params.shape, frame_params.shape)
+            frame_imu_trainLoader = pipeline.get_dataset_dataloader(folder)
+            # imu_trainLoader, frame_trainLoader = pipeline.get_dataset_dataloader(folder)
+            a = iter(frame_imu_trainLoader)
+            frame_data, gaze_data, imu_data = next(a)
+            imu_params, frame_params = pipeline.get_encoder_params(imu_data, frame_data)
             fused = pipeline.get_fusion_params(imu_params, frame_params)
-            print(fused.shape)
             coordinate = pipeline.temporal_modelling(fused)
 
-            ## gaze_data shape -> [batch_size, 2(combined frames), 4(pts.for each frame), 2(x, y)]
             print(coordinate.shape, gaze_data.shape)
 
+            print(frame_data.shape, gaze_data.shape, imu_data.shape)
+            print(coordinate, gaze_data)
             break

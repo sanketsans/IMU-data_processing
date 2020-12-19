@@ -8,7 +8,7 @@ import argparse
 import cv2, sys, os
 from flownet2.networks import FlowNetS
 sys.path.append('../')
-from getDataset import ImageDataset
+# from getDataset import ImageDataset
 from variables import RootVariables
 
 class VIS_ENCODER:
