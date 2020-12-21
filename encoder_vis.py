@@ -11,8 +11,9 @@ sys.path.append('../')
 # from getDataset import ImageDataset
 from variables import RootVariables
 
-class VIS_ENCODER:
+class VIS_ENCODER(nn.Module):
     def __init__(self, args, checkpoint_path, device, input_channels=6, batch_norm=False):
+        super(VIS_ENCODER, self).__init__()
         self.net = FlowNetS.FlowNetS(args, input_channels, batch_norm).to(device)
         dict = torch.load(checkpoint_path)
         self.net.load_state_dict(dict["state_dict"])
@@ -22,7 +23,7 @@ class VIS_ENCODER:
         for params in self.newNet.parameters():
             params.requires_grad = False
 
-    def run_model(self, input_img):
+    def forward(self, input_img):
         out = self.newNet(input_img)
         out = out.view(-1, 8192*8)
         self.fc = nn.Linear(8192*8, 1024)

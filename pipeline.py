@@ -10,8 +10,9 @@ from gaze_plotter import GET_DATAFRAME_FILES
 from getDataset import FRAME_IMU_DATASET
 from variables import RootVariables
 
-class FusionPipeline:
+class FusionPipeline(nn.Module):
     def __init__(self, vars, args, checkpoint):
+        super(FusionPipeline, self).__init__()
         # self.rootfolder = rootfolder
         self.device = torch.device("cpu")
         self.var = vars
@@ -39,7 +40,8 @@ class FusionPipeline:
         os.chdir(self.var.root + self.rootfolder)
 
         frame_imu_dataset = FRAME_IMU_DATASET(self.var.root, self.rootfolder, device=self.device)
-        frame_imu_dataset.populate_data(frame_imu_dataset.first_frame, 0)
+        frame_imu_dataset.get_new_first_frame(frame_imu_dataset.first_frame, 100)
+        frame_imu_dataset.populate_data(frame_imu_dataset.first_frame)
         # torch.save(frame_imu_dataset.stack_frames, self.var.root + self.rootfolder + 'stack_frames.pt')
         frame_imu_dataLoader = torch.utils.data.DataLoader(frame_imu_dataset, batch_size=self.var.batch_size)
 
@@ -47,7 +49,7 @@ class FusionPipeline:
 
     def get_encoder_params(self, imu_BatchData, frame_BatchData):
         imu_encoder_params = self.imuModel(imu_BatchData.float())
-        frame_encoder_params = self.frameModel.run_model(frame_BatchData)
+        frame_encoder_params = self.frameModel(frame_BatchData)
         # return imu_encoder_params
         return imu_encoder_params, frame_encoder_params
 
@@ -72,10 +74,20 @@ class FusionPipeline:
 
         return gaze_pred
 
+    def forward(self, folder, batch_imu_data, batch_frame_data):
+        # frame_imu_trainLoader = self.get_dataset_dataloader(folder)
+        imu_params, frame_params = pipeline.get_encoder_params(batch_imu_data, batch_frame_data)
+        fused = pipeline.get_fusion_params(imu_params, frame_params)
+        coordinate = pipeline.temporal_modelling(fused)
+
+        return coordinate
+
 
 if __name__ == "__main__":
     # folder = 'imu_BookShelf_S1/'
     var = RootVariables()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(device)
     parser = argparse.ArgumentParser()
     parser.add_argument('--fp16', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
     parser.add_argument("--rgb_max", type=float, default=255.)
@@ -88,15 +100,13 @@ if __name__ == "__main__":
             print(subDir)
             folder = subDir
             frame_imu_trainLoader = pipeline.get_dataset_dataloader(folder)
-            # imu_trainLoader, frame_trainLoader = pipeline.get_dataset_dataloader(folder)
             a = iter(frame_imu_trainLoader)
             frame_data, gaze_data, imu_data = next(a)
-            imu_params, frame_params = pipeline.get_encoder_params(imu_data, frame_data)
-            fused = pipeline.get_fusion_params(imu_params, frame_params)
-            coordinate = pipeline.temporal_modelling(fused)
 
-            print(coordinate.shape, gaze_data.shape)
+            coordinate = pipeline(folder, imu_data, frame_data).to(device)
 
-            print(frame_data.shape, gaze_data.shape, imu_data.shape)
-            print(coordinate, gaze_data)
+            print(coordinate.shape, gaze_data.shape, coordinate)
+
+            print(frame_data.shape, imu_data.shape)
+
             break
