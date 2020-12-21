@@ -11,17 +11,18 @@ from variables import RootVariables
 device = torch.device("cpu")
 
 class IMU_ENCODER(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, num_classes):
+    def __init__(self, input_size, hidden_size, num_layers, num_classes, device):
         super(IMU_ENCODER, self).__init__()
+        self.device = device
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=True)
-        self.fc = nn.Linear(hidden_size*2, num_classes)
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=True).to(self.device)
+        self.fc = nn.Linear(hidden_size*2, num_classes).to(self.device)
 
     def forward(self, x):
-        h0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size)
-        c0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size)
+        h0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(self.device)
+        c0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(self.device)
 
         out, _ = self.lstm(x, (h0, c0))
         out = self.fc(out[:, -1, :])

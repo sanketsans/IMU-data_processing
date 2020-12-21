@@ -4,6 +4,7 @@ import cv2
 import torch
 import torch.nn.functional as F
 import argparse
+from tqdm import tqdm
 from encoder_imu import IMU_ENCODER
 from encoder_vis import VIS_ENCODER
 from gaze_plotter import GET_DATAFRAME_FILES
@@ -15,7 +16,7 @@ class FusionPipeline(nn.Module):
     def __init__(self, vars, args, checkpoint):
         super(FusionPipeline, self).__init__()
         # self.rootfolder = rootfolder
-        self.device = torch.device("cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.var = vars
         self.checkpoint_path = self.var.root + checkpoint
         self.activation = nn.Sigmoid()
@@ -23,17 +24,17 @@ class FusionPipeline(nn.Module):
         self.temporalSize = 32
 
         ## IMU Models
-        self.imuModel = IMU_ENCODER(self.var.input_size, self.var.hidden_size, self.var.num_layers, self.var.num_classes).to(self.device)
+        self.imuModel = IMU_ENCODER(self.var.input_size, self.var.hidden_size, self.var.num_layers, self.var.num_classes, self.device)
 
         ## FRAME MODELS
         self.args = args
-        self.frameModel =  VIS_ENCODER(self.args, self.checkpoint_path, self.device).to(device)
+        self.frameModel =  VIS_ENCODER(self.args, self.checkpoint_path, self.device)
 
         ## TEMPORAL MODELS
-        self.temporalModel = IMU_ENCODER(self.temporalSize, self.var.hidden_size, self.var.num_layers, self.var.num_classes*8).to(self.device)
-        self.fc1 = nn.Linear(self.var.num_classes*8, 512)
-        self.fc2 = nn.Linear(512, 128)
-        self.fc3 = nn.Linear(128, 2)
+        self.temporalModel = IMU_ENCODER(self.temporalSize, self.var.hidden_size, self.var.num_layers, self.var.num_classes*8, self.device)
+        self.fc1 = nn.Linear(self.var.num_classes*8, 512).to(self.device)
+        self.fc2 = nn.Linear(512, 128).to(self.device)
+        self.fc3 = nn.Linear(128, 2).to(self.device)
         # self.regressor = nn.Sequential(*[self.fc1, self.fc2, self.fc3])
 
     def get_dataset_dataloader(self, folder):
@@ -49,8 +50,8 @@ class FusionPipeline(nn.Module):
         return frame_imu_dataLoader
 
     def get_encoder_params(self, imu_BatchData, frame_BatchData):
-        imu_encoder_params = self.imuModel(imu_BatchData.float())
-        frame_encoder_params = self.frameModel(frame_BatchData)
+        imu_encoder_params = self.imuModel(imu_BatchData.float()).to(self.device)
+        frame_encoder_params = self.frameModel(frame_BatchData).to(self.device)
         # return imu_encoder_params
         return imu_encoder_params, frame_encoder_params
 
@@ -61,16 +62,16 @@ class FusionPipeline(nn.Module):
         newIMU = imu_params * imu_activated
         newFrames = frame_params * frames_activated
 
-        fused_params = torch.cat((newIMU, newFrames), dim=1)
+        fused_params = torch.cat((newIMU, newFrames), dim=1).to(self.device)
         return fused_params
 
     def temporal_modelling(self, fused_params):
         fused_params = fused_params.unsqueeze(dim = 1)
         newParams = fused_params.reshape(fused_params.shape[0], 36, 32)
-        tempOut = self.temporalModel(newParams.float())
-        regOut_1 = F.relu(self.fc1(tempOut))
-        regOut_2 = F.relu(self.fc2(regOut_1))
-        gaze_pred = self.activation(self.fc3(regOut_2))
+        tempOut = self.temporalModel(newParams.float()).to(self.device)
+        regOut_1 = F.relu(self.fc1(tempOut)).to(self.device)
+        regOut_2 = F.relu(self.fc2(regOut_1)).to(self.device)
+        gaze_pred = self.activation(self.fc3(regOut_2)).to(self.device)
         # print(newParams.shape, gaze_pred.shape)
 
         return gaze_pred
@@ -111,7 +112,8 @@ if __name__ == "__main__":
             frame_imu_trainLoader = pipeline.get_dataset_dataloader(folder)
             a = iter(frame_imu_trainLoader)
             frame_data, gaze_data, imu_data = next(a)
-            for batch_index, (frame_data, gaze_data, imu_data) in enumerate(frame_imu_trainLoader):
+            tqdm_trainLoader = tqdm(frame_imu_trainLoader)
+            for batch_index, (frame_data, gaze_data, imu_data) in enumerate(tqdm_trainLoader):
 
                 coordinate = pipeline(folder, imu_data, frame_data).to(device)
 
@@ -122,10 +124,10 @@ if __name__ == "__main__":
 
                 loss = loss_fn(coordinate, avg_gaze_data)
                 current_loss_mean = (current_loss_mean * batch_index + loss) / (batch_index + 1)
-                print('loss: {} , lr: {}'.format(current_loss_mean, optimizer.param_groups[0]['lr']))
-                # frame_imu_trainLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                #     current_loss_mean, optimizer.param_groups[0]['lr']))
-                # scheduler.step(batch_index)
+                # print('loss: {} , lr: {}'.format(current_loss_mean, optimizer.param_groups[0]['lr']))
+                tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6}'.format(
+                    current_loss_mean, optimizer.param_groups[0]['lr']))
+                scheduler.step(batch_index)
                 print()
 
                 break

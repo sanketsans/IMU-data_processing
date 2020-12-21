@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 import pandas as pd
-import sys, ast
+import sys, ast, os
 import numpy as np
 import cv2
 from tqdm import tqdm
@@ -21,11 +21,11 @@ class FRAME_IMU_DATASET(Dataset):
         self.video_file = video_file
         self.starting_frame_index = 0
         self.capture = cv2.VideoCapture(self.video_file)
-        self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.total_frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
         self.ret, self.first_frame = self.capture.read()         ## FRAME 1
         self.transforms = transforms.Compose([transforms.ToTensor()])
 
-        dataframes = GET_DATAFRAME_FILES(self.frame_count)
+        dataframes = GET_DATAFRAME_FILES(self.total_frame_count)
         self.gaze_data_frame = dataframes.get_gaze_dataframe().T
         self.gaze_pts_stack = []
 
@@ -33,7 +33,7 @@ class FRAME_IMU_DATASET(Dataset):
         self.imu_data_frame = dataframes.get_imu_dataframe().T
 
     def __len__(self):
-        return self.frame_count
+        return len(self.gaze_pts_stack)
 
     def get_gaze_pts_per_frame(self, frame_index):
         gaze_values = self.gaze_data_frame.iloc[:, frame_index][1:]
@@ -50,9 +50,13 @@ class FRAME_IMU_DATASET(Dataset):
 
     def get_new_first_frame(self, first_frame, target_starting_frame_index):
         self.starting_frame_index = target_starting_frame_index
-        for frame_num in range(target_starting_frame_index - 1):
-            if self.ret == True:
-                self.ret, new_frame = self.capture.read()
+        curr_frame = 0
+        while self.ret == True:
+                if curr_frame == target_starting_frame_index:
+                    break
+                else:
+                    self.ret, new_frame = self.capture.read()
+                    curr_frame += 1
 
         self.first_frame = new_frame
         # return self.first_frame
@@ -62,8 +66,9 @@ class FRAME_IMU_DATASET(Dataset):
         print(self.starting_frame_index)
         last_frame = cv2.resize(first_frame, (512, 512))
         last_gaze_pt = self.get_gaze_pts_per_frame(self.starting_frame_index)
-        # for frame_num in tqdm(range(self.starting_frame_index, self.frame_count-100), desc="Building frame dataset"):
-        for frame_num in tqdm(range(10), desc="Building frame dataset"):
+
+        # for frame_num in tqdm(range(10), desc="Building frame dataset"):
+        for frame_num in tqdm(range(self.starting_frame_index, self.total_frame_count-self.starting_frame_index), desc="Building frame dataset"):
             if self.ret == True:
                 self.ret, new_frame = self.capture.read()
                 new_frame = cv2.resize(new_frame, (512, 512))
@@ -184,6 +189,13 @@ class FRAME_IMU_DATASET(Dataset):
 #         return self.stack_frames[index].to(self.device), torch.from_numpy(self.gaze_pts_stack[index]).to(self.device)
 
 if __name__ == "__main__":
-
+    folder = 'imu_BookShelf_S1/'
     var = Variables()
+    os.chdir(var.root + folder)
+    dataset = FRAME_IMU_DATASET(var.root, folder)
+    dataset.get_new_first_frame(dataset.first_frame, 500)
+    dataset.populate_data(dataset.first_frame)
+
+    i, j, k = dataset[0]
+    print(j, k)
     print(var.root)
