@@ -25,6 +25,5 @@ class RootVariables:
         self.num_classes = 128
         self.num_layers = 2
 
-
 if __name__ =='__main__':
     var = Variables()

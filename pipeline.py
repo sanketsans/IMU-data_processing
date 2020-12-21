@@ -9,6 +9,7 @@ from encoder_vis import VIS_ENCODER
 from gaze_plotter import GET_DATAFRAME_FILES
 from getDataset import FRAME_IMU_DATASET
 from variables import RootVariables
+from model_params import efficientPipeline
 
 class FusionPipeline(nn.Module):
     def __init__(self, vars, args, checkpoint):
@@ -26,7 +27,7 @@ class FusionPipeline(nn.Module):
 
         ## FRAME MODELS
         self.args = args
-        self.frameModel =  VIS_ENCODER(self.args, self.checkpoint_path, self.device)
+        self.frameModel =  VIS_ENCODER(self.args, self.checkpoint_path, self.device).to(device)
 
         ## TEMPORAL MODELS
         self.temporalModel = IMU_ENCODER(self.temporalSize, self.var.hidden_size, self.var.num_layers, self.var.num_classes*8).to(self.device)
@@ -85,6 +86,7 @@ class FusionPipeline(nn.Module):
 
 if __name__ == "__main__":
     # folder = 'imu_BookShelf_S1/'
+
     var = RootVariables()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
@@ -94,7 +96,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
+
     pipeline = FusionPipeline(var, args, checkpoint)
+    current_loss_mean = 0
+    model_config = efficientPipeline
+    optimizer = eval(model_config.optimizer)(pipeline.parameters(),**model_config.optimizer_parm)
+    scheduler = eval(model_config.scheduler)(optimizer,**model_config.scheduler_parm)
+    loss_fn = eval(model_config.loss_fn)()
+    optimizer.zero_grad()
     for subDir in os.listdir(var.root):
         if 'imu_' in subDir:
             print(subDir)
@@ -102,11 +111,21 @@ if __name__ == "__main__":
             frame_imu_trainLoader = pipeline.get_dataset_dataloader(folder)
             a = iter(frame_imu_trainLoader)
             frame_data, gaze_data, imu_data = next(a)
+            for batch_index, (frame_data, gaze_data, imu_data) in enumerate(frame_imu_trainLoader):
 
-            coordinate = pipeline(folder, imu_data, frame_data).to(device)
+                coordinate = pipeline(folder, imu_data, frame_data).to(device)
 
-            print(coordinate.shape, gaze_data.shape, coordinate)
+                gaze_data = gaze_data.reshape(gaze_data.shape[0], gaze_data.shape[1], -1)
+                avg_gaze_data = torch.sum(gaze_data, 2)
+                avg_gaze_data = avg_gaze_data / 8.0
+                print(coordinate.shape, gaze_data.shape, frame_data.shape, imu_data.shape, avg_gaze_data.shape)
 
-            print(frame_data.shape, imu_data.shape)
+                loss = loss_fn(coordinate, avg_gaze_data)
+                current_loss_mean = (current_loss_mean * batch_index + loss) / (batch_index + 1)
+                print('loss: {} , lr: {}'.format(current_loss_mean, optimizer.param_groups[0]['lr']))
+                # frame_imu_trainLoader.set_description('loss: {:.4} lr:{:.6}'.format(
+                #     current_loss_mean, optimizer.param_groups[0]['lr']))
+                # scheduler.step(batch_index)
+                print()
 
-            break
+                break

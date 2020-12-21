@@ -62,7 +62,8 @@ class FRAME_IMU_DATASET(Dataset):
         print(self.starting_frame_index)
         last_frame = cv2.resize(first_frame, (512, 512))
         last_gaze_pt = self.get_gaze_pts_per_frame(self.starting_frame_index)
-        for frame_num in tqdm(range(self.starting_frame_index, self.frame_count-100), desc="Building frame dataset"):
+        # for frame_num in tqdm(range(self.starting_frame_index, self.frame_count-100), desc="Building frame dataset"):
+        for frame_num in tqdm(range(10), desc="Building frame dataset"):
             if self.ret == True:
                 self.ret, new_frame = self.capture.read()
                 new_frame = cv2.resize(new_frame, (512, 512))
