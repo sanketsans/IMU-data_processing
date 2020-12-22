@@ -2,6 +2,7 @@ import sys, os
 import numpy as np
 import torch.nn as nn
 import cv2
+from pathlib import Path
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
@@ -42,7 +43,7 @@ class FusionPipeline(nn.Module):
         self.fc3 = nn.Linear(128, 2).to(self.device)
         # self.regressor = nn.Sequential(*[self.fc1, self.fc2, self.fc3])
 
-    def get_dataset_dataloader(self, folder, trim_frame_size=600):
+    def get_dataset_dataloader(self, folder, trim_frame_size=150):
         self.rootfolder = folder
         os.chdir(self.var.root + self.rootfolder)
 
@@ -140,6 +141,14 @@ if __name__ == "__main__":
     train_loss = []
     val_loss = []
     test_loss = []
+    if Path('train_loss.txt').is_file():
+        os.system('rm train_loss.txt')
+        os.sytem('rm val_loss.txt')
+        os.system('rm test_loss.txt')
+    else:
+        os.system('touch train_loss.txt')
+        os.system('touch val_loss.txt')
+        os.system('touch test_loss.txt')
 
     for epoch in range(n_epochs):
         for subDir in os.listdir(var.root):
@@ -167,7 +176,7 @@ if __name__ == "__main__":
                     tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6}'.format(
                         current_loss_mean, optimizer.param_groups[0]['lr']))
 
-                    tfile.write(loss.item() + '\n')
+                    tfile.write(str(loss.item()) + '\n')
 
                     train_loss.append(loss.item())
 
@@ -196,7 +205,7 @@ if __name__ == "__main__":
                         tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
                             current_loss_mean_val, optimizer.param_groups[0]['lr']))
                         val_loss.append(loss.item())
-                        vfile.append(loss.item() + '\n')
+                        vfile.append(str(loss.item()) + '\n')
                     vfile.close()
 
         with torch.no_grad():
@@ -218,6 +227,6 @@ if __name__ == "__main__":
                 tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
                     current_loss_mean_test, optimizer.param_groups[0]['lr']))
                 test_loss.append(loss.item())
-                ttfile.append(loss.item() + '\n')
+                ttfile.append(str(loss.item()) + '\n')
 
             ttfile.close()
