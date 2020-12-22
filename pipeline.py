@@ -1,8 +1,11 @@
 import sys, os
+import numpy as np
 import torch.nn as nn
 import cv2
 import torch
 import torch.nn.functional as F
+import torch.optim as optim
+from torch.utils.data.sampler import SequentialSampler
 import argparse
 from tqdm import tqdm
 from encoder_imu import IMU_ENCODER
@@ -15,13 +18,14 @@ from model_params import efficientPipeline
 class FusionPipeline(nn.Module):
     def __init__(self, vars, args, checkpoint):
         super(FusionPipeline, self).__init__()
+        torch.manual_seed(2)
         # self.rootfolder = rootfolder
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.var = vars
         self.checkpoint_path = self.var.root + checkpoint
         self.activation = nn.Sigmoid()
-        self.temporalSeq = 36
-        self.temporalSize = 32
+        self.temporalSeq = 18
+        self.temporalSize = 64
 
         ## IMU Models
         self.imuModel = IMU_ENCODER(self.var.input_size, self.var.hidden_size, self.var.num_layers, self.var.num_classes, self.device)
@@ -32,24 +36,48 @@ class FusionPipeline(nn.Module):
 
         ## TEMPORAL MODELS
         self.temporalModel = IMU_ENCODER(self.temporalSize, self.var.hidden_size, self.var.num_layers, self.var.num_classes*8, self.device)
+
         self.fc1 = nn.Linear(self.var.num_classes*8, 512).to(self.device)
         self.fc2 = nn.Linear(512, 128).to(self.device)
         self.fc3 = nn.Linear(128, 2).to(self.device)
         # self.regressor = nn.Sequential(*[self.fc1, self.fc2, self.fc3])
 
-    def get_dataset_dataloader(self, folder):
+    def get_dataset_dataloader(self, folder, trim_frame_size=600):
         self.rootfolder = folder
         os.chdir(self.var.root + self.rootfolder)
 
-        frame_imu_dataset = FRAME_IMU_DATASET(self.var.root, self.rootfolder, 500, device=self.device)
+        frame_imu_dataset = FRAME_IMU_DATASET(self.var.root, self.rootfolder, trim_frame_size, device=self.device)
+        # dataset_size = len(frame_imu_dataset)
+        # indices = list(range(dataset_size))
+        # valSplit_size = int(np.floor(validation_split * dataset_size))
+        #
+        # train_indices, val_indices = indices[valSplit_size:], indices[:valSplit_size]
+
+        # Creating PT data samplers and loaders:
+        # train_sampler = SequentialSampler(train_indices)
+        # valid_sampler = SequentialSampler(val_indices)
+        # trainLoader =  torch.utils.data.DataLoader(frame_imu_dataset, batch_size=self.var.batch_size, sampler=train_sampler)
+        # valLoader = torch.utils.data.DataLoader(frame_imu_dataset, batch_size=self.var.batch_size, sampler=valid_sampler)
         # torch.save(frame_imu_dataset.stack_frames, self.var.root + self.rootfolder + 'stack_frames.pt')
         frame_imu_dataLoader = torch.utils.data.DataLoader(frame_imu_dataset, batch_size=self.var.batch_size)
 
         return frame_imu_dataLoader
+        # return trainLoader, valLoader
+
+    def init_stage(self):
+        # IMU Model
+        self.imuModel_h0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+        self.imuModel_c0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+
+        ## TEMP Model
+        self.tempModel_h0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+        self.tempModel_c0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
 
     def get_encoder_params(self, imu_BatchData, frame_BatchData):
-        imu_encoder_params = self.imuModel(imu_BatchData.float()).to(self.device)
+        imu_encoder_params, (h0, c0) = self.imuModel(imu_BatchData.float(), (self.imuModel_h0, self.imuModel_c0))
+        # imu_encoder_params, _ = self.imuModel(imu_BatchData.float())
         frame_encoder_params = self.frameModel(frame_BatchData).to(self.device)
+        self.imuModel_h0, self.imuModel_c0 = h0.detach(), c0.detach()
         # return imu_encoder_params
         return imu_encoder_params, frame_encoder_params
 
@@ -65,12 +93,14 @@ class FusionPipeline(nn.Module):
 
     def temporal_modelling(self, fused_params):
         fused_params = fused_params.unsqueeze(dim = 1)
-        newParams = fused_params.reshape(fused_params.shape[0], 36, 32)
-        tempOut = self.temporalModel(newParams.float()).to(self.device)
+        newParams = fused_params.reshape(fused_params.shape[0], self.temporalSeq, self.temporalSize)
+        # tempOut, _ = self.temporalModel(newParams.float())
+        tempOut, (h0, c0) = self.temporalModel(newParams.float(), (self.tempModel_h0, self.tempModel_c0))
         regOut_1 = F.relu(self.fc1(tempOut)).to(self.device)
         regOut_2 = F.relu(self.fc2(regOut_1)).to(self.device)
         gaze_pred = self.activation(self.fc3(regOut_2)).to(self.device)
         # print(newParams.shape, gaze_pred.shape)
+        self.tempModel_h0, self.tempModel_c0 = h0.detach(), c0.detach()
 
         return gaze_pred
 
@@ -80,7 +110,7 @@ class FusionPipeline(nn.Module):
         fused = pipeline.get_fusion_params(imu_params, frame_params)
         coordinate = pipeline.temporal_modelling(fused)
 
-        return coordinate
+        return coordinate.type(torch.float32)
 
 
 if __name__ == "__main__":
@@ -97,35 +127,79 @@ if __name__ == "__main__":
     checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
 
     pipeline = FusionPipeline(var, args, checkpoint)
-    current_loss_mean = 0
+    current_loss_mean = 0.0
     model_config = efficientPipeline
-    optimizer = eval(model_config.optimizer)(pipeline.parameters(),**model_config.optimizer_parm)
-    scheduler = eval(model_config.scheduler)(optimizer,**model_config.scheduler_parm)
-    loss_fn = eval(model_config.loss_fn)()
+    optimizer = optim.Adam(pipeline.parameters(), lr=0.001, weight_decay=0.00001)
+    loss_fn = nn.SmoothL1Loss()
+    # optimizer = eval(model_config.optimizer)(pipeline.parameters(),**model_config.optimizer_parm)
+    # scheduler = eval(model_config.scheduler)(optimizer,**model_config.scheduler_parm)
+    # loss_fn = eval(model_config.loss_fn)()
+    n_epochs = 1
+
     optimizer.zero_grad()
-    for subDir in os.listdir(var.root):
-        if 'imu_' in subDir:
-            print(subDir)
-            folder = subDir
-            frame_imu_trainLoader = pipeline.get_dataset_dataloader(folder)
-            a = iter(frame_imu_trainLoader)
-            frame_data, gaze_data, imu_data = next(a)
-            tqdm_trainLoader = tqdm(frame_imu_trainLoader)
-            for batch_index, (frame_data, gaze_data, imu_data) in enumerate(tqdm_trainLoader):
+    train_loss = []
+    val_loss = []
+    test_loss = []
+    for epoch in range(n_epochs):
+        for subDir in os.listdir(var.root):
+            if 'imu_' in subDir:
+                pipeline.train()
+                folder = subDir
+                trainLoader = pipeline.get_dataset_dataloader(folder)
+                pipeline.init_stage()
 
-                coordinate = pipeline(folder, imu_data, frame_data).to(device)
+                tqdm_trainLoader = tqdm(trainLoader)
+                for batch_index, (frame_data, gaze_data, imu_data) in enumerate(tqdm_trainLoader):
 
-                gaze_data = gaze_data.reshape(gaze_data.shape[0], gaze_data.shape[1], -1)
-                avg_gaze_data = torch.sum(gaze_data, 2)
-                avg_gaze_data = avg_gaze_data / 8.0
-                print(coordinate.shape, gaze_data.shape, frame_data.shape, imu_data.shape, avg_gaze_data.shape)
+                    coordinate = pipeline(folder, imu_data, frame_data).to(device)
 
-                loss = loss_fn(coordinate, avg_gaze_data)
-                current_loss_mean = (current_loss_mean * batch_index + loss) / (batch_index + 1)
-                # print('loss: {} , lr: {}'.format(current_loss_mean, optimizer.param_groups[0]['lr']))
-                tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                    current_loss_mean, optimizer.param_groups[0]['lr']))
-                scheduler.step(batch_index)
-                print()
+                    gaze_data = gaze_data.reshape(gaze_data.shape[0], gaze_data.shape[1], -1)
+                    avg_gaze_data = torch.sum(gaze_data, 2)
+                    avg_gaze_data = avg_gaze_data / 8.0
 
-            break
+                    loss = loss_fn(coordinate, avg_gaze_data.type(torch.float32).detach())
+                    current_loss_mean = (current_loss_mean * batch_index + loss) / (batch_index + 1)
+                    # print('loss: {} , lr: {}'.format(current_loss_mean, optimizer.param_groups[0]['lr']))
+                    tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6}'.format(
+                        current_loss_mean, optimizer.param_groups[0]['lr']))
+                    train_loss.append(loss.item())
+
+                    loss.backward()
+                    optimizer.step()
+                    # scheduler.step(batch_index)
+
+                pipeline.eval()
+
+                folder = 'val_BookShelf_S1'
+                valLoader = pipeline.get_dataset_dataloader(folder)
+                tqdm_valLoader = tqdm(valLoader)
+                current_loss_mean_val = 0.0
+                for batch_index, (frame_data, gaze_data, imu_data) in enumerate(tqdm_valLoader):
+                    coordinate = pipeline(folder, imu_data, frame_data).to(device)
+
+                    gaze_data = gaze_data.reshape(gaze_data.shape[0], gaze_data.shape[1], -1)
+                    avg_gaze_data = torch.sum(gaze_data, 2)
+                    avg_gaze_data = avg_gaze_data / 8.0
+
+                    loss = loss_fn(coordinate, avg_gaze_data)
+                    current_loss_mean_val = (current_loss_mean_val * batch_index + loss) / (batch_index + 1)
+                    tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
+                        current_loss_mean_val, optimizer.param_groups[0]['lr']))
+                    val_loss.append(loss.item())
+
+        folder = 'test_BookShelf_S1'
+        testLoader = pipeline.get_dataset_dataloader(folder)
+        tqdm_testLoader = tqdm(testLoader)
+        current_loss_mean_test = 0.0
+        for batch_index, (frame_data, gaze_data, imu_data) in enumerate(tqdm_testLoader):
+            coordinate = pipeline(folder, imu_data, frame_data).to(device)
+
+            gaze_data = gaze_data.reshape(gaze_data.shape[0], gaze_data.shape[1], -1)
+            avg_gaze_data = torch.sum(gaze_data, 2)
+            avg_gaze_data = avg_gaze_data / 8.0
+
+            loss = loss_fn(coordinate, avg_gaze_data)
+            current_loss_mean_test = (current_loss_mean_test * batch_index + loss) / (batch_index + 1)
+            tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
+                current_loss_mean_test, optimizer.param_groups[0]['lr']))
+            test_loss.append(loss.item())

@@ -14,19 +14,23 @@ from variables import RootVariables
 class VIS_ENCODER(nn.Module):
     def __init__(self, args, checkpoint_path, device, input_channels=6, batch_norm=False):
         super(VIS_ENCODER, self).__init__()
+        torch.manual_seed(1)
         self.device = device
-        self.net = FlowNetS.FlowNetS(args, input_channels, batch_norm).to(device)
+        self.net = FlowNetS.FlowNetS(args, input_channels, batch_norm)
         dict = torch.load(checkpoint_path)
         self.net.load_state_dict(dict["state_dict"])
-        self.newNet = nn.Sequential(*list(self.net.children())[0:10])
+        self.net = nn.Sequential(*list(self.net.children())[0:10]).to(self.device)
+        for i in range(len(self.net) - 1):
+            self.net[i][1] = nn.ReLU()
         self.fc = nn.Linear(8192*8, 1024).to(self.device)
-        self.newNet[9] = self.newNet[9][0]
+        # self.net[8][1] = nn.ReLU(inplace=False)
+        self.net[9] = self.net[9][0]
 
-        for params in self.newNet.parameters():
-            params.requires_grad = False
+        for params in self.net.parameters():
+            params.requires_grad = True
 
     def forward(self, input_img):
-        out = self.newNet(input_img)
+        out = self.net(input_img)
         out = out.view(-1, 8192*8)
         out = self.fc(out)
 
@@ -38,21 +42,15 @@ if __name__ == "__main__":
     device = torch.device("cpu")
     folder = 'imu_BookShelf_S1/'
     os.chdir(var.root + folder)
-    dataset = ImageDataset(var.root, folder, device)
-    dataset.populate_data(dataset.first_frame, 0)
-    print(var.batch_size, len(dataset))
-    trainLoader = torch.utils.data.DataLoader(dataset, batch_size=var.batch_size)
-    a = iter(trainLoader)
-    imgs, gaze_pts = next(a)
-    print(imgs.shape, gaze_pts.shape)
-    print(gaze_pts)
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('--fp16', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
-    # parser.add_argument("--rgb_max", type=float, default=255.)
-    #
-    # args = parser.parse_args()
-    # ## load model without batch norm
-    # checkpoint_path = var.root + "FlowNet2-S_checkpoint.pth.tar"
-    #
-    # img_enc = VIS_ENCODER(args, checkpoint_path, device)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--fp16', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
+    parser.add_argument("--rgb_max", type=float, default=255.)
+
+    args = parser.parse_args()
+    ## load model without batch norm
+    checkpoint_path = var.root + "FlowNet2-S_checkpoint.pth.tar"
+
+    img_enc = VIS_ENCODER(args, checkpoint_path, device)
+    print(img_enc)
     # output = img_enc.run_model(imgs)

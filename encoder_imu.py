@@ -13,6 +13,7 @@ device = torch.device("cpu")
 class IMU_ENCODER(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, num_classes, device):
         super(IMU_ENCODER, self).__init__()
+        torch.manual_seed(0)
         self.device = device
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -20,14 +21,14 @@ class IMU_ENCODER(nn.Module):
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=True).to(self.device)
         self.fc = nn.Linear(hidden_size*2, num_classes).to(self.device)
 
-    def forward(self, x):
-        h0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(self.device)
-        c0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(self.device)
-
-        out, _ = self.lstm(x, (h0, c0))
+    def forward(self, x, hidden):
+        # h0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(self.device)
+        # c0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(self.device)
+        # hidden = (h0, c0)
+        out, hidden = self.lstm(x, hidden)
         out = self.fc(out[:, -1, :])
 
-        return out
+        return out.to(self.device), hidden
 
 ## PREPARING THE DATA
 # folder = sys.argv[1]
