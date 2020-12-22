@@ -41,9 +41,7 @@ class FusionPipeline(nn.Module):
         self.rootfolder = folder
         os.chdir(self.var.root + self.rootfolder)
 
-        frame_imu_dataset = FRAME_IMU_DATASET(self.var.root, self.rootfolder, device=self.device)
-        frame_imu_dataset.get_new_first_frame(frame_imu_dataset.first_frame, 100)
-        frame_imu_dataset.populate_data(frame_imu_dataset.first_frame)
+        frame_imu_dataset = FRAME_IMU_DATASET(self.var.root, self.rootfolder, 500, device=self.device)
         # torch.save(frame_imu_dataset.stack_frames, self.var.root + self.rootfolder + 'stack_frames.pt')
         frame_imu_dataLoader = torch.utils.data.DataLoader(frame_imu_dataset, batch_size=self.var.batch_size)
 
@@ -130,4 +128,4 @@ if __name__ == "__main__":
                 scheduler.step(batch_index)
                 print()
 
-                break
+            break
