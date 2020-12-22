@@ -173,18 +173,19 @@ if __name__ == "__main__":
                     avg_gaze_data = torch.sum(gaze_data, 2)
                     avg_gaze_data = avg_gaze_data / 8.0
 
-                    loss = loss_fn(coordinate, avg_gaze_data.type(torch.float32).detach())
+                    loss = loss_fn(coordinate, avg_gaze_data.type(torch.float32))
                     current_loss_mean = (current_loss_mean * batch_index + loss) / (batch_index + 1)
                     # print('loss: {} , lr: {}'.format(current_loss_mean, optimizer.param_groups[0]['lr']))
                     tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6}'.format(
                         current_loss_mean, optimizer.param_groups[0]['lr']))
 
-                    tfile.write(str(loss.item()) + '\n')
+                    # tfile.write(str(loss.item()) + '\n')
 
                     train_loss.append(loss.item())
 
                     loss.backward()
                     optimizer.step()
+                break
                     # scheduler.step(batch_index)
         #
         #         pipeline.eval()

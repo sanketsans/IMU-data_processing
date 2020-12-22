@@ -25,14 +25,17 @@ class FRAME_IMU_DATASET(Dataset):
         self.dataframes = GET_DATAFRAME_FILES(self.rootfolder, self.total_frame_count)
 
         ## GAZE
-        self.gaze_data_frame = self.dataframes.get_gaze_dataframe().T
-        self.gaze_pts = []
-        self.gaze_pts_stack = []
+        self.gaze_data_frame = self.dataframes.get_gaze_dataframe()
+        self.gaze_data_frame = self.gaze_data_frame.iloc[self.starting_frame_index:self.total_frame_count-self.starting_frame_index+1].T
+        self.gaze_data_pts = []
+        self.gaze_values = None
+        # self.gaze_pts_stack = []
 
         ## IMU
         self.imu_data_frame = self.dataframes.get_imu_dataframe()
         self.imu_data_frame = self.imu_data_frame.iloc[self.starting_frame_index:self.total_frame_count-self.starting_frame_index+1].T
         self.imu_data_pts = []
+        self.imu_values = None
 
         ## FRAMES
         self.stack_frames = []
@@ -64,19 +67,6 @@ class FRAME_IMU_DATASET(Dataset):
 
         return self.gaze_pts
 
-    # def get_new_first_frame(self, capture, target_starting_frame_index):
-    #     self.capture.set(cv2.CAP_PROP_POS_FRAMES,myFrameNumber)
-    #     ret, first_frame = capture.read()
-    #     curr_frame = 0
-    #     for i in range(target_starting_frame_index):
-    #         if ret == True:
-    #             ret, new_frame = capture.read()
-    #             curr_frame += 1
-    #             first_frame = new_frame
-    #
-    #     return ret, first_frame, curr_frame
-        # return self.first_frame
-
 
     def populate_data(self, first_frame):
         # for frame_num in tqdm(range(10), desc="Building frame dataset"):
@@ -92,29 +82,36 @@ class FRAME_IMU_DATASET(Dataset):
 
                 self.last_frame = self.new_frame
 
-                self.new_gaze_pt = self.get_gaze_pts_per_frame(self.starting_frame_index+self.frames_included)
-                self.gaze_pts_stack.append(np.array([self.last_gaze_pt, self.new_gaze_pt]))
-                self.frames_included += 1
-
-                self.last_gaze_pt = self.new_gaze_pt
-                self.last_gaze_pt = self.new_gaze_pt
+                # self.new_gaze_pt = self.get_gaze_pts_per_frame(self.starting_frame_index+self.frames_included)
+                # self.gaze_pts_stack.append(np.array([self.last_gaze_pt, self.new_gaze_pt]))
+                # self.frames_included += 1
+                #
+                # self.last_gaze_pt = self.new_gaze_pt
+                # self.last_gaze_pt = self.new_gaze_pt
 
         return self.frames_included
 
     def __getitem__(self, index):
-        imu_values = self.imu_data_frame.iloc[:, index][1:]
-        self.imu_data_pts = []
-        for i, data in enumerate(imu_values):
+        self.imu_values = self.imu_data_frame.iloc[:, index][1:]
+        self.gaze_values = self.gaze_data_frame.iloc[:, index][1:]
+        self.imu_data_pts, self.gaze_data_pts = [], []
+        for i, data in enumerate(self.imu_values):
             try:
                 (acc, gyro) = ast.literal_eval(data)
                 data_pt = np.array(acc + gyro)
                 data_pt[1] += 9.80665
                 self.imu_data_pts.append(np.round(data_pt, 3))
+            except Exception as e:
+                print(e)
 
+        for j, data in enumerate(self.gaze_values):
+            try:
+                self.gaze_pts.append(tuple(ast.literal_eval(data)))
             except Exception as e:
                 print(e)
         # print(self.gaze_pts_stack[index].shape, self.imu_data_pts.shape)
-        return self.stack_frames[index].to(self.device), torch.from_numpy(self.gaze_pts_stack[index]).to(self.device), torch.from_numpy(np.array(self.imu_data_pts)).to(self.device)
+        return self.stack_frames[index].to(self.device), torch.tensor(self.gaze_data_pts).to(self.device), torch.tensor(self.imu_data_pts).to(self.device)
+        # return self.stack_frames[index].to(self.device), torch.from_numpy(self.gaze_pts_stack[index]).to(self.device), torch.from_numpy(np.array(self.imu_data_pts)).to(self.device)
 
 # class IMUDataset(Dataset):
 #     def __init__(self, root, rootfolder, device=None):
