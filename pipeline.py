@@ -116,6 +116,14 @@ class FusionPipeline(nn.Module):
 
 if __name__ == "__main__":
     # folder = 'imu_BookShelf_S1/'
+    if Path('train_loss.txt').is_file():
+        os.system('rm train_loss.txt')
+        os.sytem('rm val_loss.txt')
+        os.system('rm test_loss.txt')
+    else:
+        os.system('touch train_loss.txt')
+        os.system('touch val_loss.txt')
+        os.system('touch test_loss.txt')
 
     var = RootVariables()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -141,14 +149,7 @@ if __name__ == "__main__":
     train_loss = []
     val_loss = []
     test_loss = []
-    if Path('train_loss.txt').is_file():
-        os.system('rm train_loss.txt')
-        os.sytem('rm val_loss.txt')
-        os.system('rm test_loss.txt')
-    else:
-        os.system('touch train_loss.txt')
-        os.system('touch val_loss.txt')
-        os.system('touch test_loss.txt')
+
 
     for epoch in range(n_epochs):
         for subDir in os.listdir(var.root):
@@ -160,8 +161,8 @@ if __name__ == "__main__":
                 pipeline.init_stage()
 
                 tqdm_trainLoader = tqdm(trainLoader)
-                tfile = open('train_loss.txt', 'a+')
-                tfile.append(subDir + '\n')
+                tfile = open(var.root + 'train_loss.txt', 'a+')
+                tfile.write(subDir + '\n')
                 for batch_index, (frame_data, gaze_data, imu_data) in enumerate(tqdm_trainLoader):
 
                     coordinate = pipeline(folder, imu_data, frame_data).to(device)
@@ -184,11 +185,10 @@ if __name__ == "__main__":
                     optimizer.step()
                     # scheduler.step(batch_index)
 
-
                 pipeline.eval()
                 with torch.no_grad():
                     folder = 'val_BookShelf_S1'
-                    vfile = open('val_loss.txt', 'a+')
+                    vfile = open(var.root + 'val_loss.txt', 'a')
                     vfile.append(folder + '\n')
                     valLoader = pipeline.get_dataset_dataloader(folder)
                     tqdm_valLoader = tqdm(valLoader)
@@ -205,12 +205,12 @@ if __name__ == "__main__":
                         tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
                             current_loss_mean_val, optimizer.param_groups[0]['lr']))
                         val_loss.append(loss.item())
-                        vfile.append(str(loss.item()) + '\n')
+                        vfile.write(str(loss.item()) + '\n')
                     vfile.close()
 
         with torch.no_grad():
             folder = 'test_BookShelf_S1'
-            ttfile = open('test_loss.txt', 'a+')
+            ttfile = open(var.root + 'test_loss.txt', 'a')
             ttfile.append(folder + '\n')
             testLoader = pipeline.get_dataset_dataloader(folder)
             tqdm_testLoader = tqdm(testLoader)
@@ -227,6 +227,6 @@ if __name__ == "__main__":
                 tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
                     current_loss_mean_test, optimizer.param_groups[0]['lr']))
                 test_loss.append(loss.item())
-                ttfile.append(str(loss.item()) + '\n')
+                ttfile.write(str(loss.item()) + '\n')
 
             ttfile.close()

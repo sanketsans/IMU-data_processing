@@ -22,7 +22,7 @@ class RootVariables:
         # self.root = '/home/sanketthakur/Documents/gaze_pred/IMU-data_processing/'
         self.root = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
         self.input_size = 6
-        self.batch_size = 5
+        self.batch_size = 32
         self.hidden_size = 128
         self.num_classes = 128
         self.num_layers = 2
