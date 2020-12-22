@@ -59,7 +59,7 @@ class FusionPipeline(nn.Module):
         # trainLoader =  torch.utils.data.DataLoader(frame_imu_dataset, batch_size=self.var.batch_size, sampler=train_sampler)
         # valLoader = torch.utils.data.DataLoader(frame_imu_dataset, batch_size=self.var.batch_size, sampler=valid_sampler)
         # torch.save(frame_imu_dataset.stack_frames, self.var.root + self.rootfolder + 'stack_frames.pt')
-        frame_imu_dataLoader = torch.utils.data.DataLoader(frame_imu_dataset, batch_size=self.var.batch_size)
+        frame_imu_dataLoader = torch.utils.data.DataLoader(frame_imu_dataset, batch_size=self.var.batch_size, drop_last=True)
 
         return frame_imu_dataLoader
         # return trainLoader, valLoader
@@ -140,15 +140,19 @@ if __name__ == "__main__":
     train_loss = []
     val_loss = []
     test_loss = []
+
     for epoch in range(n_epochs):
         for subDir in os.listdir(var.root):
             if 'imu_' in subDir:
+                print(subDir)
                 pipeline.train()
                 folder = subDir
                 trainLoader = pipeline.get_dataset_dataloader(folder)
                 pipeline.init_stage()
 
                 tqdm_trainLoader = tqdm(trainLoader)
+                tfile = open('train_loss.txt', 'a+')
+                tfile.append(subDir + '\n')
                 for batch_index, (frame_data, gaze_data, imu_data) in enumerate(tqdm_trainLoader):
 
                     coordinate = pipeline(folder, imu_data, frame_data).to(device)
@@ -162,44 +166,58 @@ if __name__ == "__main__":
                     # print('loss: {} , lr: {}'.format(current_loss_mean, optimizer.param_groups[0]['lr']))
                     tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6}'.format(
                         current_loss_mean, optimizer.param_groups[0]['lr']))
+
+                    tfile.write(loss.item() + '\n')
+
                     train_loss.append(loss.item())
 
                     loss.backward()
                     optimizer.step()
                     # scheduler.step(batch_index)
 
+
                 pipeline.eval()
+                with torch.no_grad():
+                    folder = 'val_BookShelf_S1'
+                    vfile = open('val_loss.txt', 'a+')
+                    vfile.append(folder + '\n')
+                    valLoader = pipeline.get_dataset_dataloader(folder)
+                    tqdm_valLoader = tqdm(valLoader)
+                    current_loss_mean_val = 0.0
+                    for batch_index, (frame_data, gaze_data, imu_data) in enumerate(tqdm_valLoader):
+                        coordinate = pipeline(folder, imu_data, frame_data).to(device)
 
-                folder = 'val_BookShelf_S1'
-                valLoader = pipeline.get_dataset_dataloader(folder)
-                tqdm_valLoader = tqdm(valLoader)
-                current_loss_mean_val = 0.0
-                for batch_index, (frame_data, gaze_data, imu_data) in enumerate(tqdm_valLoader):
-                    coordinate = pipeline(folder, imu_data, frame_data).to(device)
+                        gaze_data = gaze_data.reshape(gaze_data.shape[0], gaze_data.shape[1], -1)
+                        avg_gaze_data = torch.sum(gaze_data, 2)
+                        avg_gaze_data = avg_gaze_data / 8.0
 
-                    gaze_data = gaze_data.reshape(gaze_data.shape[0], gaze_data.shape[1], -1)
-                    avg_gaze_data = torch.sum(gaze_data, 2)
-                    avg_gaze_data = avg_gaze_data / 8.0
+                        loss = loss_fn(coordinate, avg_gaze_data)
+                        current_loss_mean_val = (current_loss_mean_val * batch_index + loss) / (batch_index + 1)
+                        tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
+                            current_loss_mean_val, optimizer.param_groups[0]['lr']))
+                        val_loss.append(loss.item())
+                        vfile.append(loss.item() + '\n')
+                    vfile.close()
 
-                    loss = loss_fn(coordinate, avg_gaze_data)
-                    current_loss_mean_val = (current_loss_mean_val * batch_index + loss) / (batch_index + 1)
-                    tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                        current_loss_mean_val, optimizer.param_groups[0]['lr']))
-                    val_loss.append(loss.item())
+        with torch.no_grad():
+            folder = 'test_BookShelf_S1'
+            ttfile = open('test_loss.txt', 'a+')
+            ttfile.append(folder + '\n')
+            testLoader = pipeline.get_dataset_dataloader(folder)
+            tqdm_testLoader = tqdm(testLoader)
+            current_loss_mean_test = 0.0
+            for batch_index, (frame_data, gaze_data, imu_data) in enumerate(tqdm_testLoader):
+                coordinate = pipeline(folder, imu_data, frame_data).to(device)
 
-        folder = 'test_BookShelf_S1'
-        testLoader = pipeline.get_dataset_dataloader(folder)
-        tqdm_testLoader = tqdm(testLoader)
-        current_loss_mean_test = 0.0
-        for batch_index, (frame_data, gaze_data, imu_data) in enumerate(tqdm_testLoader):
-            coordinate = pipeline(folder, imu_data, frame_data).to(device)
+                gaze_data = gaze_data.reshape(gaze_data.shape[0], gaze_data.shape[1], -1)
+                avg_gaze_data = torch.sum(gaze_data, 2)
+                avg_gaze_data = avg_gaze_data / 8.0
 
-            gaze_data = gaze_data.reshape(gaze_data.shape[0], gaze_data.shape[1], -1)
-            avg_gaze_data = torch.sum(gaze_data, 2)
-            avg_gaze_data = avg_gaze_data / 8.0
+                loss = loss_fn(coordinate, avg_gaze_data)
+                current_loss_mean_test = (current_loss_mean_test * batch_index + loss) / (batch_index + 1)
+                tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
+                    current_loss_mean_test, optimizer.param_groups[0]['lr']))
+                test_loss.append(loss.item())
+                ttfile.append(loss.item() + '\n')
 
-            loss = loss_fn(coordinate, avg_gaze_data)
-            current_loss_mean_test = (current_loss_mean_test * batch_index + loss) / (batch_index + 1)
-            tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                current_loss_mean_test, optimizer.param_groups[0]['lr']))
-            test_loss.append(loss.item())
+            ttfile.close()
