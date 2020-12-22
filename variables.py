@@ -1,8 +1,8 @@
 class Variables:
     def __init__(self):
         # self.root = '/home/sans/Downloads/gaze_data/'
-        # self.root = '/home/sanketthakur/Documents/gaze_pred/IMU-data_processing/'
-        self.root = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
+        self.root = '/home/sanketthakur/Documents/gaze_pred/IMU-data_processing/'
+        # self.root = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
         self.gaze_dataList = []     ## list to handle data with multiple single element json items.
         self.timestamps_gaze = []   ## timestamp of data
         self.gaze_data = [[], []]   ## 2D co-ordinates of gaze2D; (x,y)
@@ -19,8 +19,8 @@ class Variables:
 class RootVariables:
     def __init__(self):
         # self.root = '/home/sans/Downloads/gaze_data/'
-        # self.root = '/home/sanketthakur/Documents/gaze_pred/IMU-data_processing/'
-        self.root = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
+        self.root = '/home/sanketthakur/Documents/gaze_pred/IMU-data_processing/'
+        # self.root = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
         self.input_size = 6
         self.batch_size = 32
         self.hidden_size = 128

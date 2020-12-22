@@ -10,24 +10,22 @@ from helpers import Helpers
 from variables import Variables
 
 class BUILDING_DATASET:
-    def __init__(self):
+    def __init__(self, folder):
         self.utils = Helpers()
         self.var = Variables()
         try:
-            g = os.system('gunzip gazedata.gz')
-            i = os.system('gunzip imudata.gz')
+            os.system('gunzip ' + self.var.root + folder + 'gazedata.gz')
+            os.system('gunzip ' + self.var.root + folder + 'imudata.gz')
         except Exception as e:
             pass
-            # print(e)
+
         with open('gazedata') as f:
             for jsonObj in f:
-                studentDict = json.loads(jsonObj)
-                self.var.gaze_dataList.append(studentDict)
+                self.var.gaze_dataList.append(json.loads(jsonObj))
 
         with open('imudata') as f:
             for jsonObj in f:
-                studentDict = json.loads(jsonObj)
-                self.var.imu_dataList.append(studentDict)
+                self.var.imu_dataList.append(json.loads(jsonObj))
 
 
     def POP_GAZE_DATA(self, return_val=False):
@@ -37,7 +35,7 @@ class BUILDING_DATASET:
             try:
                 if(float(data['timestamp']) > 0.000000000 and float(data['timestamp']) < 600.0):
                     nT = self.utils.floor(data['timestamp'])
-                    diff = round(nT - oT, 2)
+                    # diff = round(nT - oT, 2)
                     self.var.gaze_data[0].append(data['data']['gaze2d'][0])
                     self.var.gaze_data[1].append(data['data']['gaze2d'][1])
                     self.var.timestamps_gaze.append(nT)

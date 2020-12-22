@@ -10,31 +10,32 @@ sys.path.append('../')
 from proc import BUILDING_DATASET
 
 class GET_DATAFRAME_FILES:
-    def __init__(self, frame_count):
-        self.dataset = BUILDING_DATASET()
-        self.panda_data = {}
+    def __init__(self, folder, frame_count):
         if Path('gaze_file.csv').is_file():
             print('File exists')
             self.df_gaze = pd.read_csv('gaze_file.csv')
             self.df_imu = pd.read_csv('imu_file.csv')
 
         else:
-            start_index = 0
+            print('File did not exists')
+            self.dataset = BUILDING_DATASET(folder)
+            self.panda_data = {}
+            self.start_index = 0
             self.dataset.POP_GAZE_DATA()
             for sec in range(frame_count):
                 self.panda_data[sec] = list(zip(self.dataset.var.gaze_data[0][start_index:start_index + 4], self.dataset.var.gaze_data[1][start_index:start_index+4]))
                 start_index += 4
 
-            df_gaze = pd.DataFrame({ key:pd.Series(value) for key, value in self.panda_data.items()}).T
-            df_gaze.columns =['Gaze_Pt_1', 'Gaze_Pt_2', 'Gaze_Pt_3', 'Gaze_Pt_4']
-            df_gaze.to_csv('gaze_file.csv')
+            self.df_gaze = pd.DataFrame({ key:pd.Series(value) for key, value in self.panda_data.items()}).T
+            self.df_gaze.columns =['Gaze_Pt_1', 'Gaze_Pt_2', 'Gaze_Pt_3', 'Gaze_Pt_4']
+            self.df_gaze.to_csv('gaze_file.csv')
             self.df_gaze = pd.read_csv('gaze_file.csv')
 
             ## GAZE DATAFRAME
-            start_index = 0
+            self.start_index = 0
             self.dataset.POP_IMU_DATA()
             for sec in range(frame_count):
-                self.panda_data[sec] = list(tuple((sec, sec+2)))
+                # self.panda_data[sec] = list(tuple((sec, sec+2)))
                 self.panda_data[sec] = list(zip(zip(self.dataset.var.imu_data_acc[0][start_index:start_index+4],
                                             self.dataset.var.imu_data_acc[1][start_index:start_index+4],
                                             self.dataset.var.imu_data_acc[2][start_index:start_index+4]),
@@ -44,9 +45,9 @@ class GET_DATAFRAME_FILES:
                                                 self.dataset.var.imu_data_gyro[2][start_index:start_index+4])))
                 start_index += 4
 
-            df_imu = pd.DataFrame({ key:pd.Series(value) for key, value in self.panda_data.items()}).T
-            df_imu.columns =['IMU_Acc/Gyro_Pt_1', 'IMU_Acc/Gyro_Pt_2', 'IMU_Acc/Gyro_Pt_3', 'IMU_Acc/Gyro_Pt_4']
-            df_imu.to_csv('imu_file.csv')
+            self.df_imu = pd.DataFrame({ key:pd.Series(value) for key, value in self.panda_data.items()}).T
+            self.df_imu.columns =['IMU_Acc/Gyro_Pt_1', 'IMU_Acc/Gyro_Pt_2', 'IMU_Acc/Gyro_Pt_3', 'IMU_Acc/Gyro_Pt_4']
+            self.df_imu.to_csv('imu_file.csv')
             self.df_imu = pd.read_csv('imu_file.csv')
 
 

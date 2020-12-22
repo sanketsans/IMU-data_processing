@@ -17,25 +17,32 @@ class FRAME_IMU_DATASET(Dataset):
         self.rootfolder = rootfolder
         self.path = self.root + self.rootfolder  + '/' if self.rootfolder[-1]!='/' else (self.root + self.rootfolder)
         self.device = device
-        ## FRAMES
-        self.stack_frames = []
-        self.video_file = video_file
-        self.starting_frame_index = target_starting_frame_index
 
-        self.capture = cv2.VideoCapture(self.video_file)
+        self.starting_frame_index = target_starting_frame_index
+        self.capture = cv2.VideoCapture(video_file)
         self.total_frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
         self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.starting_frame_index)
-        dataframes = GET_DATAFRAME_FILES(self.total_frame_count)
+        self.dataframes = GET_DATAFRAME_FILES(self.rootfolder, self.total_frame_count)
+
         ## GAZE
-        self.gaze_data_frame = dataframes.get_gaze_dataframe().T
+        self.gaze_data_frame = self.dataframes.get_gaze_dataframe().T
+        self.gaze_pts = []
         self.gaze_pts_stack = []
 
         ## IMU
-        self.imu_data_frame = dataframes.get_imu_dataframe()
+        self.imu_data_frame = self.dataframes.get_imu_dataframe()
         self.imu_data_frame = self.imu_data_frame.iloc[self.starting_frame_index:self.total_frame_count-self.starting_frame_index+1].T
+        self.imu_data_pts = []
 
+        ## FRAMES
+        self.stack_frames = []
         self.ret, self.first_frame =  self.capture.read()               ## FRAME 1
         self.transforms = transforms.Compose([transforms.ToTensor()])
+        self.last_frame = cv2.resize(self.first_frame, (512, 512))
+        self.new_frame = self.last_frame
+        self.last_gaze_pt = self.get_gaze_pts_per_frame(self.starting_frame_index)
+        self.new_gaze_pt = self.last_gaze_pt
+        self.frames_included = 1
         self.frames_included = self.populate_data(self.first_frame)
 
 
@@ -44,16 +51,18 @@ class FRAME_IMU_DATASET(Dataset):
 
     def get_gaze_pts_per_frame(self, frame_index):
         gaze_values = self.gaze_data_frame.iloc[:, frame_index][1:]
-        gaze_pts = []
+        self.gaze_pts = []
+        # gaze_pts = []
         for index, data in enumerate(gaze_values):
             try:
-                (gaze_x, gaze_y) = ast.literal_eval(data)
-                gaze_pt = np.array([gaze_x, gaze_y])
-                gaze_pts.append(tuple((gaze_x, gaze_y)))
+                self.gaze_pts.append(tuple(ast.literal_eval(data)))
+                # (gaze_x, gaze_y) = ast.literal_eval(data)
+                # gaze_pt = np.array([gaze_x, gaze_y])
+                # gaze_pts.append(tuple((gaze_x, gaze_y)))
             except Exception as e:
                 print(e)
 
-        return gaze_pts
+        return self.gaze_pts
 
     # def get_new_first_frame(self, capture, target_starting_frame_index):
     #     self.capture.set(cv2.CAP_PROP_POS_FRAMES,myFrameNumber)
@@ -70,43 +79,42 @@ class FRAME_IMU_DATASET(Dataset):
 
 
     def populate_data(self, first_frame):
-        last_frame = cv2.resize(first_frame, (512, 512))
-        last_gaze_pt = self.get_gaze_pts_per_frame(self.starting_frame_index)
-        frames_included = 1
         # for frame_num in tqdm(range(10), desc="Building frame dataset"):
         for frame_num in tqdm(range(self.starting_frame_index, self.total_frame_count-self.starting_frame_index), desc="Building frame dataset"):
             if self.ret == True:
-                self.ret, new_frame = self.capture.read()
-                new_frame = cv2.resize(new_frame, (512, 512))
-                # cv2.imwrite('frame%d.png'.format(frame_num), new_frame)
-                stack_frame = np.concatenate((last_frame, new_frame), axis=2)
-                stack_frame = self.transforms(stack_frame)
-                self.stack_frames.append(stack_frame)
+                self.ret, self.new_frame = self.capture.read()
+                self.new_frame = cv2.resize(self.new_frame, (512, 512))
+                ## cv2.imwrite('frame%d.png'.format(frame_num), new_frame)
+                # stack_frame = np.concatenate((last_frame, new_frame), axis=2)
+                # stack_frame = self.transforms(stack_frame)
+                # self.stack_frames.append(stack_frame)
+                self.stack_frames.append(self.transforms(np.concatenate((self.last_frame, self.new_frame), axis=2)))
 
-                last_frame = new_frame
+                self.last_frame = self.new_frame
 
-                new_gaze_pt = self.get_gaze_pts_per_frame(self.starting_frame_index+frames_included)
-                self.gaze_pts_stack.append(np.array([last_gaze_pt, new_gaze_pt]))
-                frames_included += 1
+                self.new_gaze_pt = self.get_gaze_pts_per_frame(self.starting_frame_index+self.frames_included)
+                self.gaze_pts_stack.append(np.array([self.last_gaze_pt, self.new_gaze_pt]))
+                self.frames_included += 1
 
-                last_gaze_pt = new_gaze_pt
-                last_gaze_pt = new_gaze_pt
+                self.last_gaze_pt = self.new_gaze_pt
+                self.last_gaze_pt = self.new_gaze_pt
 
-        return frames_included
+        return self.frames_included
 
     def __getitem__(self, index):
         imu_values = self.imu_data_frame.iloc[:, index][1:]
-        imu_data_pts = []
+        self.imu_data_pts = []
         for i, data in enumerate(imu_values):
             try:
                 (acc, gyro) = ast.literal_eval(data)
                 data_pt = np.array(acc + gyro)
                 data_pt[1] += 9.80665
-                imu_data_pts.append(np.round(data_pt, 3))
+                self.imu_data_pts.append(np.round(data_pt, 3))
+
             except Exception as e:
                 print(e)
-
-        return self.stack_frames[index].to(self.device), torch.from_numpy(self.gaze_pts_stack[index]).to(self.device), torch.from_numpy(np.array(imu_data_pts)).to(self.device)
+        # print(self.gaze_pts_stack[index].shape, self.imu_data_pts.shape)
+        return self.stack_frames[index].to(self.device), torch.from_numpy(self.gaze_pts_stack[index]).to(self.device), torch.from_numpy(np.array(self.imu_data_pts)).to(self.device)
 
 # class IMUDataset(Dataset):
 #     def __init__(self, root, rootfolder, device=None):
