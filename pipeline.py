@@ -17,18 +17,19 @@ from variables import RootVariables
 from model_params import efficientPipeline
 
 class FusionPipeline(nn.Module):
-    def __init__(self, vars, args, checkpoint):
+    def __init__(self, vars, args, checkpoint, trim_frame_size=150):
         super(FusionPipeline, self).__init__()
         torch.manual_seed(2)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.var = vars
         self.checkpoint_path = self.var.root + checkpoint
         self.activation = nn.Sigmoid()
-        self.temporalSeq = 18
-        self.temporalSize = 64
+        self.temporalSeq = 64
+        self.temporalSize = 20
+        self.trim_frame_size = trim_frame_size
 
         ## IMU Models
-        self.imuModel = IMU_ENCODER(self.var.input_size, self.var.hidden_size, self.var.num_layers, self.var.num_classes, self.device)
+        self.imuModel = IMU_ENCODER(self.var.imu_input_size, self.var.hidden_size, self.var.num_layers, self.var.num_classes, self.device)
 
         ## FRAME MODELS
         self.args = args
@@ -49,27 +50,14 @@ class FusionPipeline(nn.Module):
         self.frame_encoder_params = None
         self.fused_params = None
 
-    def get_dataset_dataloader(self, folder, trim_frame_size=150):
+    def get_dataset_dataloader(self, folder):
         self.rootfolder = folder
         os.chdir(self.var.root + self.rootfolder)
 
-        self.frame_imu_dataset = FRAME_IMU_DATASET(self.var.root, self.rootfolder, trim_frame_size, device=self.device)
-        # dataset_size = len(frame_imu_dataset)
-        # indices = list(range(dataset_size))
-        # valSplit_size = int(np.floor(validation_split * dataset_size))
-        #
-        # train_indices, val_indices = indices[valSplit_size:], indices[:valSplit_size]
-
-        # Creating PT data samplers and loaders:
-        # train_sampler = SequentialSampler(train_indices)
-        # valid_sampler = SequentialSampler(val_indices)
-        # trainLoader =  torch.utils.data.DataLoader(frame_imu_dataset, batch_size=self.var.batch_size, sampler=train_sampler)
-        # valLoader = torch.utils.data.DataLoader(frame_imu_dataset, batch_size=self.var.batch_size, sampler=valid_sampler)
-        # torch.save(frame_imu_dataset.stack_frames, self.var.root + self.rootfolder + 'stack_frames.pt')
+        self.frame_imu_dataset = FRAME_IMU_DATASET(self.var.root, self.rootfolder, self.trim_frame_size, device=self.device)
         self.frame_imu_dataLoader = torch.utils.data.DataLoader(self.frame_imu_dataset, batch_size=self.var.batch_size, drop_last=True)
 
         return self.frame_imu_dataLoader
-        # return trainLoader, valLoader
 
     def init_stage(self):
         # IMU Model
@@ -137,55 +125,89 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
-
-    pipeline = FusionPipeline(var, args, checkpoint)
+    trim_frame_size = 150
     current_loss_mean = 0.0
-    model_config = efficientPipeline
+    pipeline = FusionPipeline(var, args, checkpoint, trim_frame_size)
     optimizer = optim.Adam(pipeline.parameters(), lr=0.001, weight_decay=0.00001)
     loss_fn = nn.SmoothL1Loss()
-    # optimizer = eval(model_config.optimizer)(pipeline.parameters(),**model_config.optimizer_parm)
-    # scheduler = eval(model_config.scheduler)(optimizer,**model_config.scheduler_parm)
-    # loss_fn = eval(model_config.loss_fn)()
     n_epochs = 1
-
     optimizer.zero_grad()
-    train_loss = []
-    val_loss = []
-    test_loss = []
-
+    # train_loss = []
+    # val_loss = []
+    # test_loss = []
     for epoch in range(n_epochs):
         for subDir in os.listdir(var.root):
             if 'imu_' in subDir:
-                print(subDir)
                 pipeline.train()
-                folder = subDir
-                trainLoader = pipeline.get_dataset_dataloader(folder)
                 pipeline.init_stage()
-
+                trainLoader = pipeline.get_dataset_dataloader(subDir)
                 tqdm_trainLoader = tqdm(trainLoader)
-                # tfile = open(var.root + 'train_loss.txt', 'a+')
-                # tfile.write(subDir + '\n')
                 for batch_index, (frame_data, gaze_data, imu_data) in enumerate(tqdm_trainLoader):
+                    imu_data = imu_data.reshape(imu_data.shape[0], imu_data.shape[2], -1)
+                    coordinate = pipeline(subDir, imu_data, frame_data).to(device)
 
-                    coordinate = pipeline(folder, imu_data, frame_data).to(device)
-
-                    gaze_data = gaze_data.reshape(gaze_data.shape[0], gaze_data.shape[1], -1)
-                    avg_gaze_data = torch.sum(gaze_data, 2)
+                    gaze_data = gaze_data.reshape(gaze_data.shape[0], gaze_data.shape[2]*4, -1) ## *4 because 4 imu data per frame
+                    avg_gaze_data = torch.sum(gaze_data, 1)
                     avg_gaze_data = avg_gaze_data / 8.0
 
                     loss = loss_fn(coordinate, avg_gaze_data.type(torch.float32))
                     current_loss_mean = (current_loss_mean * batch_index + loss) / (batch_index + 1)
-                    # print('loss: {} , lr: {}'.format(current_loss_mean, optimizer.param_groups[0]['lr']))
                     tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6}'.format(
                         current_loss_mean, optimizer.param_groups[0]['lr']))
 
-                    # tfile.write(str(loss.item()) + '\n')
-
-                    train_loss.append(loss.item())
+                    # train_loss.append(loss.item())
 
                     loss.backward()
                     optimizer.step()
+                    break
                 break
+
+
+    # self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.starting_frame_index)
+    # current_loss_mean = 0.0
+    # model_config = efficientPipeline
+    # optimizer = optim.Adam(pipeline.parameters(), lr=0.001, weight_decay=0.00001)
+    # loss_fn = nn.SmoothL1Loss()
+    # n_epochs = 1
+    #
+    # optimizer.zero_grad()
+    # train_loss = []
+    # val_loss = []
+    # test_loss = []
+    #
+    # for epoch in range(n_epochs):
+    #     for subDir in os.listdir(var.root):
+    #         if 'imu_' in subDir:
+    #             print(subDir)
+    #             pipeline.train()
+    #             folder = subDir
+    #             trainLoader = pipeline.get_dataset_dataloader(folder)
+    #             pipeline.init_stage()
+    #
+    #             tqdm_trainLoader = tqdm(trainLoader)
+    #             # tfile = open(var.root + 'train_loss.txt', 'a+')
+    #             # tfile.write(subDir + '\n')
+    #             for batch_index, (frame_data, gaze_data, imu_data) in enumerate(tqdm_trainLoader):
+    #
+    #                 coordinate = pipeline(folder, imu_data, frame_data).to(device)
+    #
+    #                 gaze_data = gaze_data.reshape(gaze_data.shape[0], gaze_data.shape[1], -1)
+    #                 avg_gaze_data = torch.sum(gaze_data, 2)
+    #                 avg_gaze_data = avg_gaze_data / 8.0
+    #
+    #                 loss = loss_fn(coordinate, avg_gaze_data.type(torch.float32))
+    #                 current_loss_mean = (current_loss_mean * batch_index + loss) / (batch_index + 1)
+    #                 # print('loss: {} , lr: {}'.format(current_loss_mean, optimizer.param_groups[0]['lr']))
+    #                 tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6}'.format(
+    #                     current_loss_mean, optimizer.param_groups[0]['lr']))
+    #
+    #                 # tfile.write(str(loss.item()) + '\n')
+    #
+    #                 train_loss.append(loss.item())
+    #
+    #                 loss.backward()
+    #                 optimizer.step()
+    #             break
                     # scheduler.step(batch_index)
         #
         #         pipeline.eval()

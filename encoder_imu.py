@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import sys, os, ast
 sys.path.append('../')
-# from getDataset import IMUDataset
+from getDataset import FRAME_IMU_DATASET
 from variables import RootVariables
 
 device = torch.device("cpu")
@@ -36,14 +36,18 @@ class IMU_ENCODER(nn.Module):
 # os.chdir(dataset_folder + folder + '/' if folder[-1]!='/' else (dataset_folder + folder))
 if __name__ == "__main__":
     folder = sys.argv[1]
+    device = torch.device("cpu")
+
     var = RootVariables()
-    dataset = IMUDataset(var.root, folder)
-    trainLoader = torch.utils.data.DataLoader(dataset, batch_size=var.batch_size)
+    os.chdir(var.root + folder)
+    dataset = FRAME_IMU_DATASET(var.root, folder, 150, device)
+    trainLoader = torch.utils.data.DataLoader(dataset, batch_size=var.batch_size, drop_last=True)
     a = iter(trainLoader)
-    data = next(a)
+    f, g, i = next(a)
     # print(data.shape, data)
-    print(data[0])
-    print(data.shape) # [batch_size, sequence_length, input_size]
+    print(i.shape) # [batch_size, sequence_length, input_size]
+    i = i.reshape(i.shape[0], i.shape[2], -1)
+    print(i.shape)
 
     model = IMU_ENCODER(var.input_size, var.hidden_size, var.num_layers, var.num_classes).to(device)
     scores = model(data.float())
