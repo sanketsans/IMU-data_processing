@@ -13,11 +13,12 @@ class BUILDING_DATASET:
     def __init__(self, folder):
         self.utils = Helpers()
         self.var = Variables()
-        try:
-            os.system('gunzip ' + self.var.root + folder + 'gazedata.gz')
-            os.system('gunzip ' + self.var.root + folder + 'imudata.gz')
-        except Exception as e:
-            pass
+        self.folder = folder
+        # try:
+        #     os.system('gunzip ' + self.var.root + folder + 'gazedata.gz')
+        #     os.system('gunzip ' + self.var.root + folder + 'imudata.gz')
+        # except Exception as e:
+        #     pass
 
         with open('gazedata') as f:
             for jsonObj in f:
@@ -28,9 +29,12 @@ class BUILDING_DATASET:
                 self.var.imu_dataList.append(json.loads(jsonObj))
 
 
-    def POP_GAZE_DATA(self, return_val=False):
+    def POP_GAZE_DATA(self, frame_count, return_val=False):
         ### GAZE DATA
         nT, oT = 1.9, 1.9
+        if Path(self.var.root + self.folder + 'gazedata.gz').is_file():
+            x = os.system('gunzip ' + self.var.root + self.folder + 'gazedata.gz')
+
         for data in self.var.gaze_dataList:
             try:
                 if(float(data['timestamp']) > 0.000000000 and float(data['timestamp']) < 600.0):
@@ -46,13 +50,20 @@ class BUILDING_DATASET:
                 self.var.gaze_data[0].append(0.0)
                 self.var.gaze_data[1].append(0.0)
 
+        if len(self.var.gaze_data[0])/4 < frame_count:
+            for i in range(len(self.var.gaze_data[0]), frame_count*4):
+                self.var.gaze_data[0].append(np.nan)
+                self.var.gaze_data[1].append(np.nan)
+
         if return_val:
             return self.utils.get_sample_rate(self.var.timestamps_gaze)
 
-    def POP_IMU_DATA(self, return_val=False):
+    def POP_IMU_DATA(self, frame_count, return_val=False):
         nT, oT = 0.0, 0.0
+        if Path(self.var.root + self.folder + 'imudata.gz').is_file():
+            x = os.system('gunzip ' + self.var.root + self.folder + 'imudata.gz')
 
-        for data in self.var.imu_dataList:
+        for index, data in enumerate(self.var.imu_dataList):
             try:
                 if(float(data['timestamp']) > 0.000 and float(data['timestamp']) < 600.00):
                     nT = self.utils.floor(data['timestamp'])
@@ -103,6 +114,17 @@ class BUILDING_DATASET:
                     oT = nT
             except Exception as e:
                 pass
+
+
+        if len(self.var.imu_data_acc[0])/4 < frame_count:
+            for i in range(len(self.var.imu_data_acc[0]), frame_count*4):
+                self.var.imu_data_acc[0].append(np.nan)
+                self.var.imu_data_acc[1].append(np.nan)
+                self.var.imu_data_acc[2].append(np.nan)
+
+                self.var.imu_data_gyro[0].append(np.nan)
+                self.var.imu_data_gyro[1].append(np.nan)
+                self.var.imu_data_gyro[2].append(np.nan)
 
         if return_val:
             return self.utils.get_sample_rate(self.var.timestamps_imu)

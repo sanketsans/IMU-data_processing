@@ -128,7 +128,7 @@ if __name__ == "__main__":
     checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
     trim_frame_size = 150
     # current_loss_mean, current_loss_mean_val, current_loss_mean_test = 0.0, 0.0,  0.0
-    pipeline = FusionPipeline(var, args, checkpoint, trim_frame_size)
+    pipeline = FusionPipeline(var, args, checkpoint, trim_frame_size)   ## MODEL DEFINE KIYA IDHAR
     optimizer = optim.SGD(pipeline.parameters(), lr=0.001, weight_decay=0.00001)
     loss_fn = nn.MSELoss()
     n_epochs = 1
@@ -152,7 +152,7 @@ if __name__ == "__main__":
                     imu_data = imu_data.reshape(imu_data.shape[0], imu_data.shape[2], -1)
                     coordinate = pipeline(subDir, imu_data, frame_data).to(device)
 
-                    gaze_data = gaze_data.view(gaze_data.shape[0], gaze_data.shape[2]*2, -1) ## *4 because 4 imu data per frame
+                    gaze_data = gaze_data.view(gaze_data.shape[0], gaze_data.shape[2]*2, -1) ## *2 because 4 imu data per frame
                     avg_gaze_data = torch.sum(gaze_data, 1)
                     avg_gaze_data = avg_gaze_data / 8.0
                     loss = loss_fn(coordinate, avg_gaze_data.type(torch.float32))

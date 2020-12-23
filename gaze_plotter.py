@@ -79,7 +79,8 @@ class GET_DATAFRAME_FILES:
 
 if __name__ == "__main__":
     folder = sys.argv[1]
-    dataset_folder = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
+    dataset_folder = '/home/sans/Downloads/gaze_data/'
+    # dataset_folder = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
     # os.chdir(dataset_folder)
     os.chdir(dataset_folder + folder + '/' if folder[-1]!='/' else (dataset_folder + folder))
 
