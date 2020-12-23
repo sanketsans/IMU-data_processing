@@ -60,7 +60,7 @@ class BUILDING_DATASET:
                     # print(nT)
                     # print(diff, round((nT-oT), 2))
                     self.var.imu_data_acc[0].append(data['data']['accelerometer'][0])
-                    self.var.imu_data_acc[1].append(data['data']['accelerometer'][1])
+                    self.var.imu_data_acc[1].append(data['data']['accelerometer'][1] + 9.80665)
                     self.var.imu_data_acc[2].append(data['data']['accelerometer'][2])
 
                     self.var.imu_data_gyro[0].append(data['data']['gyroscope'][0])

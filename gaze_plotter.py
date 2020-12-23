@@ -11,6 +11,7 @@ from proc import BUILDING_DATASET
 
 class GET_DATAFRAME_FILES:
     def __init__(self, folder, frame_count):
+        self.dataset = BUILDING_DATASET(folder)
         if Path('gaze_file.csv').is_file():
             print('File exists')
             self.df_gaze = pd.read_csv('gaze_file.csv')
@@ -20,7 +21,7 @@ class GET_DATAFRAME_FILES:
             print('File did not exists')
             self.dataset = BUILDING_DATASET(folder)
             self.panda_data = {}
-            self.start_index = 0
+            start_index = 0
             self.dataset.POP_GAZE_DATA()
             for sec in range(frame_count):
                 self.panda_data[sec] = list(zip(self.dataset.var.gaze_data[0][start_index:start_index + 4], self.dataset.var.gaze_data[1][start_index:start_index+4]))
@@ -32,8 +33,9 @@ class GET_DATAFRAME_FILES:
             self.df_gaze = pd.read_csv('gaze_file.csv')
 
             ## GAZE DATAFRAME
-            self.start_index = 0
+            start_index = 0
             self.dataset.POP_IMU_DATA()
+            self.dataset = self.get_normalized_values(self.dataset)
             for sec in range(frame_count):
                 # self.panda_data[sec] = list(tuple((sec, sec+2)))
                 self.panda_data[sec] = list(zip(zip(self.dataset.var.imu_data_acc[0][start_index:start_index+4],
@@ -47,9 +49,26 @@ class GET_DATAFRAME_FILES:
 
             self.df_imu = pd.DataFrame({ key:pd.Series(value) for key, value in self.panda_data.items()}).T
             self.df_imu.columns =['IMU_Acc/Gyro_Pt_1', 'IMU_Acc/Gyro_Pt_2', 'IMU_Acc/Gyro_Pt_3', 'IMU_Acc/Gyro_Pt_4']
+            # self.df_imu[['Acc_Pt_1', 'Gyro_Pt_1']] = pd.DataFrame(self.df_imu['IMU_Acc/Gyro_Pt_1'].tolist(), index=self.df_imu.index)
+            # self.df_imu[['Acc_Pt_2', 'Gyro_Pt_2']] = pd.DataFrame(self.df_imu['IMU_Acc/Gyro_Pt_2'].tolist(), index=self.df_imu.index)
+            # self.df_imu[['Acc_Pt_3', 'Gyro_Pt_3']] = pd.DataFrame(self.df_imu['IMU_Acc/Gyro_Pt_3'].tolist(), index=self.df_imu.index)
+            # self.df_imu[['Acc_Pt_4', 'Gyro_Pt_4']] = pd.DataFrame(self.df_imu['IMU_Acc/Gyro_Pt_4'].tolist(), index=self.df_imu.index)
+            # del self.df_imu['IMU_Acc/Gyro_Pt_1']
+            # del self.df_imu['IMU_Acc/Gyro_Pt_2']
+            # del self.df_imu['IMU_Acc/Gyro_Pt_3']
+            # del self.df_imu['IMU_Acc/Gyro_Pt_4']
             self.df_imu.to_csv('imu_file.csv')
             self.df_imu = pd.read_csv('imu_file.csv')
 
+    def get_normalized_values(self, dataset):
+        dataset.var.imu_data_acc[0] = (dataset.var.imu_data_acc[0] - np.min(dataset.var.imu_data_acc[0])) / (np.max(dataset.var.imu_data_acc[0]) - np.min(dataset.var.imu_data_acc[0]))
+        dataset.var.imu_data_acc[1] = (dataset.var.imu_data_acc[1] - np.min(dataset.var.imu_data_acc[1])) / (np.max(dataset.var.imu_data_acc[1]) - np.min(dataset.var.imu_data_acc[1]))
+        dataset.var.imu_data_acc[2] = (dataset.var.imu_data_acc[2] - np.min(dataset.var.imu_data_acc[2])) / (np.max(dataset.var.imu_data_acc[2]) - np.min(dataset.var.imu_data_acc[2]))
+        dataset.var.imu_data_gyro[0] = (dataset.var.imu_data_gyro[0] - np.min(dataset.var.imu_data_gyro[0])) / (np.max(dataset.var.imu_data_gyro[0]) - np.min(dataset.var.imu_data_gyro[0]))
+        dataset.var.imu_data_gyro[1] = (dataset.var.imu_data_gyro[1] - np.min(dataset.var.imu_data_gyro[1])) / (np.max(dataset.var.imu_data_gyro[1]) - np.min(dataset.var.imu_data_gyro[1]))
+        dataset.var.imu_data_gyro[2] = (dataset.var.imu_data_gyro[2] - np.min(dataset.var.imu_data_gyro[2])) / (np.max(dataset.var.imu_data_gyro[2]) - np.min(dataset.var.imu_data_gyro[2]))
+
+        return dataset
 
     def get_imu_dataframe(self):
         return self.df_imu
@@ -72,7 +91,7 @@ if __name__ == "__main__":
     ret, frame = capture.read()
     print(frame.shape)
 
-    dataframes = GET_DATAFRAME_FILES(frame_count)
+    dataframes = GET_DATAFRAME_FILES(folder, frame_count)
     df_gaze = dataframes.get_gaze_dataframe()
     df_imu = dataframes.get_imu_dataframe()
 
