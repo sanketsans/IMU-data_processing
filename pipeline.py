@@ -133,6 +133,7 @@ if __name__ == "__main__":
     loss_fn = nn.MSELoss()
     n_epochs = 1
     optimizer.zero_grad()
+    current_loss = 1.0
     # train_loss = []
     # val_loss = []
     # test_loss = []
@@ -141,7 +142,7 @@ if __name__ == "__main__":
             if 'imu_' in subDir:
                 print(subDir)
                 tfile = open(var.root + 'train_loss.txt', 'a')
-                vtile.write(folder + '\n')
+                ttile.write(subDir + '\n')
                 pipeline.train()
                 pipeline.init_stage()
                 trainLoader = pipeline.get_dataset_dataloader(subDir)
@@ -162,6 +163,15 @@ if __name__ == "__main__":
                     tfile.write(str(loss.item()) + '\n')
                     loss.backward()
                     optimizer.step()
+
+                if (current_loss_mean < current_loss):
+                    torch.save({
+                                'epoch': epoch,
+                                'model_state_dict': pipeline.state_dict(),
+                                'optimizer_state_dict': optimizer.state_dict(),
+                                'loss': current_loss_mean,
+                                
+                                }, var.root + 'pipeline_checkpoint.pth')
                 tfile.close()
 
 
@@ -173,6 +183,7 @@ if __name__ == "__main__":
                     valLoader = pipeline.get_dataset_dataloader(folder)
                     tqdm_valLoader = tqdm(valLoader)
                     for batch_index, (frame_data, gaze_data, imu_data) in enumerate(tqdm_valLoader):
+                        imu_data = imu_data.reshape(imu_data.shape[0], imu_data.shape[2], -1)
                         coordinate = pipeline(folder, imu_data, frame_data).to(device)
 
                         gaze_data = gaze_data.view(gaze_data.shape[0], gaze_data.shape[2]*2, -1)
@@ -195,6 +206,7 @@ if __name__ == "__main__":
             tqdm_testLoader = tqdm(testLoader)
             current_loss_mean_test = 0.0
             for batch_index, (frame_data, gaze_data, imu_data) in enumerate(tqdm_testLoader):
+                imu_data = imu_data.reshape(imu_data.shape[0], imu_data.shape[2], -1)
                 coordinate = pipeline(folder, imu_data, frame_data).to(device)
 
                 gaze_data = gaze_data.reshape(gaze_data.shape[0], gaze_data.shape[2]*2, -1)
