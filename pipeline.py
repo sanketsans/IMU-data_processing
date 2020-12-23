@@ -127,13 +127,14 @@ if __name__ == "__main__":
 
     checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
     trim_frame_size = 150
-    current_loss_mean, current_loss_mean_val, current_loss_mean_test = 0.0, 0.0,  0.0
+    # current_loss_mean, current_loss_mean_val, current_loss_mean_test = 0.0, 0.0,  0.0
     pipeline = FusionPipeline(var, args, checkpoint, trim_frame_size)
-    optimizer = optim.Adam(pipeline.parameters(), lr=0.001, weight_decay=0.00001)
+    optimizer = optim.SGD(pipeline.parameters(), lr=0.001, weight_decay=0.00001)
     loss_fn = nn.MSELoss()
     n_epochs = 1
     optimizer.zero_grad()
-    current_loss = 1.0
+    current_loss = 10000.0
+    # running_loss = 0.0
     # train_loss = []
     # val_loss = []
     # test_loss = []
@@ -142,7 +143,7 @@ if __name__ == "__main__":
             if 'imu_' in subDir:
                 print(subDir)
                 tfile = open(var.root + 'train_loss.txt', 'a')
-                ttile.write(subDir + '\n')
+                tfile.write(subDir + '\n')
                 pipeline.train()
                 pipeline.init_stage()
                 trainLoader = pipeline.get_dataset_dataloader(subDir)
@@ -155,6 +156,7 @@ if __name__ == "__main__":
                     avg_gaze_data = torch.sum(gaze_data, 1)
                     avg_gaze_data = avg_gaze_data / 8.0
                     loss = loss_fn(coordinate, avg_gaze_data.type(torch.float32))
+                    # running_loss += loss.item() * imu_data.shape[0]
                     current_loss_mean = (current_loss_mean * batch_index + loss) / (batch_index + 1)
                     tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6}'.format(
                         current_loss_mean, optimizer.param_groups[0]['lr']))
@@ -165,12 +167,13 @@ if __name__ == "__main__":
                     optimizer.step()
 
                 if (current_loss_mean < current_loss):
+                    current_loss = current_loss_mean
+                    print('SAVING MODEL')
                     torch.save({
                                 'epoch': epoch,
                                 'model_state_dict': pipeline.state_dict(),
                                 'optimizer_state_dict': optimizer.state_dict(),
-                                'loss': current_loss_mean,
-                                
+                                'loss': current_loss_mean
                                 }, var.root + 'pipeline_checkpoint.pth')
                 tfile.close()
 
@@ -180,6 +183,7 @@ if __name__ == "__main__":
                     folder = 'val_BookShelf_S1'
                     vfile = open(var.root + 'val_loss.txt', 'a')
                     vfile.write(folder + '\n')
+                    pipeline.init_stage()
                     valLoader = pipeline.get_dataset_dataloader(folder)
                     tqdm_valLoader = tqdm(valLoader)
                     for batch_index, (frame_data, gaze_data, imu_data) in enumerate(tqdm_valLoader):
@@ -191,9 +195,9 @@ if __name__ == "__main__":
                         avg_gaze_data = avg_gaze_data / 8.0
 
                         loss = loss_fn(coordinate, avg_gaze_data.type(torch.float32))
-                        current_loss_mean_val = (current_loss_mean_val * batch_index + loss) / (batch_index + 1)
+                        # current_loss_mean_val = (current_loss_mean_val * batch_index + loss) / (batch_index + 1)
                         tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                            current_loss_mean_val, optimizer.param_groups[0]['lr']))
+                            loss.item(), optimizer.param_groups[0]['lr']))
                         # val_loss.append(loss.item())
                         vfile.write(str(loss.item()) + '\n')
                     vfile.close()
@@ -202,6 +206,7 @@ if __name__ == "__main__":
             folder = 'test_BookShelf_S1'
             ttfile = open(var.root + 'test_loss.txt', 'a')
             ttfile.write(folder + '\n')
+            pipeline.init_stage()
             testLoader = pipeline.get_dataset_dataloader(folder)
             tqdm_testLoader = tqdm(testLoader)
             current_loss_mean_test = 0.0
@@ -214,9 +219,9 @@ if __name__ == "__main__":
                 avg_gaze_data = avg_gaze_data / 8.0
 
                 loss = loss_fn(coordinate, avg_gaze_data)
-                current_loss_mean_test = (current_loss_mean_test * batch_index + loss) / (batch_index + 1)
+                # current_loss_mean_test = (current_loss_mean_test * batch_index + loss) / (batch_index + 1)
                 tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                    current_loss_mean_test, optimizer.param_groups[0]['lr']))
+                    loss.item(), optimizer.param_groups[0]['lr']))
                 # test_loss.append(loss.item())
                 ttfile.write(str(loss.item()) + '\n')
 
