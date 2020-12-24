@@ -7,11 +7,11 @@ import cv2
 from pathlib import Path
 import seaborn as sns
 sys.path.append('../')
-from proc import BUILDING_DATASET
+from loader import JSON_LOADER
 
 class GET_DATAFRAME_FILES:
     def __init__(self, folder, frame_count):
-        self.dataset = BUILDING_DATASET(folder)
+        self.dataset = JSON_LOADER(folder)
         if Path('gaze_file.csv').is_file():
             print('File exists')
             self.df_gaze = pd.read_csv('gaze_file.csv')
@@ -19,10 +19,9 @@ class GET_DATAFRAME_FILES:
 
         else:
             print('File did not exists')
-            self.dataset = BUILDING_DATASET(folder)
             self.panda_data = {}
             start_index = 0
-            self.dataset.POP_GAZE_DATA()
+            self.dataset.POP_GAZE_DATA(frame_count)
             for sec in range(frame_count):
                 self.panda_data[sec] = list(zip(self.dataset.var.gaze_data[0][start_index:start_index + 4], self.dataset.var.gaze_data[1][start_index:start_index+4]))
                 start_index += 4
@@ -34,7 +33,7 @@ class GET_DATAFRAME_FILES:
 
             ## GAZE DATAFRAME
             start_index = 0
-            self.dataset.POP_IMU_DATA()
+            self.dataset.POP_IMU_DATA(frame_count)
             self.dataset = self.get_normalized_values(self.dataset)
             for sec in range(frame_count):
                 # self.panda_data[sec] = list(tuple((sec, sec+2)))
@@ -79,8 +78,8 @@ class GET_DATAFRAME_FILES:
 
 if __name__ == "__main__":
     folder = sys.argv[1]
-    dataset_folder = '/home/sans/Downloads/gaze_data/'
-    # dataset_folder = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
+    # dataset_folder = '/home/sans/Downloads/gaze_data/'
+    dataset_folder = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
     # os.chdir(dataset_folder)
     os.chdir(dataset_folder + folder + '/' if folder[-1]!='/' else (dataset_folder + folder))
 
