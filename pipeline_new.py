@@ -11,7 +11,7 @@ import argparse
 from tqdm import tqdm
 from encoder_imu import IMU_ENCODER
 from encoder_vis import VIS_ENCODER
-from prepare_dataset import IMU_GAZE_DATASET, UNIFIED_FRAME_DATASET
+from prepare_dataset import IMU_GAZE_DATASET
 # from getDataset import FRAME_IMU_DATASET
 from variables import RootVariables
 # from model_params import efficientPipeline

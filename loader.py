@@ -18,11 +18,11 @@ class JSON_LOADER:
             _ = os.system('gunzip ' + self.var.root + self.folder + 'gazedata.gz')
             _ = os.system('gunzip ' + self.var.root + self.folder + 'imudata.gz')
 
-        with open('gazedata') as f:
+        with open(self.var.root + self.folder + 'gazedata') as f:
             for jsonObj in f:
                 self.var.gaze_dataList.append(json.loads(jsonObj))
 
-        with open('imudata') as f:
+        with open(self.var.root + self.folder + 'imudata') as f:
             for jsonObj in f:
                 self.var.imu_dataList.append(json.loads(jsonObj))
 
