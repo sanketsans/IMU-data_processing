@@ -171,7 +171,6 @@ class BUILDING_DATASETS:
     def create_dataframes(self, subDir, dframe_type, start_index=0):
         if dframe_type == 'gaze':
             ## GAZE
-            print(self.frame_count)
             for sec in range(self.frame_count):
                 self.panda_data[sec] = list(zip(self.dataset.var.gaze_data[0][start_index:start_index + 4], self.dataset.var.gaze_data[1][start_index:start_index+4]))
                 start_index += 4
