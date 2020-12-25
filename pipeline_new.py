@@ -2,6 +2,7 @@ import sys, os
 import numpy as np
 import torch.nn as nn
 import cv2
+import matplotlib.pyplot as plt
 from pathlib import Path
 import torch
 import torch.nn.functional as F
@@ -11,7 +12,7 @@ import argparse
 from tqdm import tqdm
 from encoder_imu import IMU_ENCODER
 from encoder_vis import VIS_ENCODER
-from prepare_dataset import IMU_GAZE_DATASET
+from prepare_dataset import IMU_GAZE_FRAME_DATASET, UNIFIED_DATASET
 # from getDataset import FRAME_IMU_DATASET
 from variables import RootVariables
 # from model_params import efficientPipeline
@@ -44,21 +45,16 @@ class FusionPipeline(nn.Module):
         # self.regressor = nn.Sequential(*[self.fc1, self.fc2, self.fc3])
 
         ##OTHER
-        self.imu_gaze_dataset = None
-        self.imu_gaze_dataloader = None
-        self.frame_dataset = None
-        self.frame_dataloader = None
+        self.unified_dataset = None
         self.imu_encoder_params = None
         self.frame_encoder_params = None
         self.fused_params = None
         self.folder_iter = iter(os.listdir(self.var.root))
         self.folder_name = None
 
-    def get_dataset_dataloader(self):
-        self.imu_gaze_dataset = IMU_GAZE_DATASET(self.var.root, self.trim_frame_size, self.device)
-        self.imu_gaze_dataloader = torch.utils.data.DataLoader(self.imu_gaze_dataset, batch_size=self.var.batch_size, drop_last=False)
-
-        return self.imu_gaze_dataloader
+    def prepare_dataset(self):
+        self.unified_dataset = IMU_GAZE_FRAME_DATASET(self.var.root, self.trim_frame_size, self.device)
+        return self.unified_dataset
 
     def init_stage(self):
         # IMU Model
@@ -96,18 +92,6 @@ class FusionPipeline(nn.Module):
 
         return gaze_pred
 
-    def get_frames_dataloader(self):
-        while True:
-            self.folder_name = next(self.folder_iter)
-            if 'imu_' in self.folder_name:
-                break
-
-        self.frame_dataset = FRAME_DATASET(self.var.root, self.folder_name, self.trim_frame_size, self.device)
-        # self.frame_dataloader = torch.utils.data.DataLoader(self.frame_dataset, batch_size=self.var.batch_size, drop_last=False)
-
-        return self.frame_dataset, self.folder_name
-
-
     def forward(self, batch_imu_data, batch_frame_data):
         # frame_imu_trainLoader = self.get_dataset_dataloader(folder)
         imu_params, frame_params = pipeline.get_encoder_params(batch_imu_data, batch_frame_data)
@@ -116,11 +100,9 @@ class FusionPipeline(nn.Module):
 
         return coordinate.type(torch.float32)
 
-
 if __name__ == "__main__":
     var = RootVariables()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(device)
     parser = argparse.ArgumentParser()
     parser.add_argument('--fp16', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
     parser.add_argument("--rgb_max", type=float, default=255.)
@@ -129,12 +111,64 @@ if __name__ == "__main__":
     checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
     trim_frame_size = 150
     current_loss_mean, current_loss_mean_val, current_loss_mean_test = 0.0, 0.0,  0.0
-    pipeline = FusionPipeline(args, checkpoint, trim_frame_size, device)   ## MODEL DEFINE KIYA IDHAR
-    optimizer = optim.SGD(pipeline.parameters(), lr=0.001, weight_decay=0.00001)
-    loss_fn = nn.MSELoss()
+    pipeline = FusionPipeline(args, checkpoint, trim_frame_size, device)
+
+    uni_dataset = pipeline.prepare_dataset()
+    uni_imu_dataset = uni_dataset.imu_datasets
+    uni_gaze_dataset = uni_dataset.gaze_datasets
+
     n_epochs = 1
-    optimizer.zero_grad()
-    current_loss = 10000.0
+    folders_num = 0
+    start_index = 0
+    sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset = None, None, None
+    for index, subDir in enumerate(os.listdir(pipeline.var.root)):
+        if 'imu_' in subDir:
+            folders_num += 1
+            subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+            os.chdir(pipeline.var.root + subDir)
+            capture = cv2.VideoCapture('scenevideo.mp4')
+            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+            end_index = start_index + frame_count - trim_frame_size*2 -1
+            sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
+            sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
+
+            with open('framesExtracted_data_' + str(trim_frame_size) + '.npy', 'rb') as f:
+                sliced_frame_dataset = np.load(f)
+                f.close()
+
+            unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset)
+            unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size)
+            a = iter(unified_dataloader)
+            f, g, i = next(a)
+            print(f.shape, i.shape, g.shape)
+            #
+            # print(len(frame_dataset), start_index, end_index)
+            # with open('framesExtracted_data_' + str(trim_frame_size) + '.npy', 'rb') as f:
+            #     frame_dataset = np.load(f)
+            #
+
+            start_index = end_index + 1
+
+        if folders_num > 1:
+            break
+
+    # var = RootVariables()
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # print(device)
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--fp16', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
+    # parser.add_argument("--rgb_max", type=float, default=255.)
+    # args = parser.parse_args()
+
+    # checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
+    # trim_frame_size = 150
+    # current_loss_mean, current_loss_mean_val, current_loss_mean_test = 0.0, 0.0,  0.0
+    # pipeline = FusionPipeline(args, checkpoint, trim_frame_size, device)   ## MODEL DEFINE KIYA IDHAR
+    # optimizer = optim.SGD(pipeline.parameters(), lr=0.001, weight_decay=0.00001)
+    # loss_fn = nn.MSELoss()
+    # n_epochs = 1
+    # optimizer.zero_grad()
+    # current_loss = 10000.0
     # running_loss = 0.0
     # train_loss = []
     # val_loss = []
@@ -142,7 +176,6 @@ if __name__ == "__main__":
     # pipeline.init_stage()
     # trainLoader = pipeline.get_dataset_dataloader()
     # tqdm_trainLoader = tqdm(trainLoader)
-    dataset = UNIFIED_FRAME_DATASET(var.root, trim_frame_size, device)
     # for index, data, in enumerate(trainLoader):
     #     frameLoader_length, folder_name = pipeline.get_frames_dataloader()
     #     print(folder_name, frameLoader_length)

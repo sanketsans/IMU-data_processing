@@ -25,125 +25,122 @@ class BUILDING_DATASETS:
         self.frame_count = 0
         self.capture = None
         self.ret = None
-        self.stack_frames = None
+        self.stack_frames = []
 
         self.panda_data = {}
 
     def standarization(self, datas):
+        datas = datas.reshape(-1, datas.shape[-1])
         rows, cols = datas.shape
         for i in range(cols):
-            mean = np.mean(datas[:,i])
-            std = np.std(datas[:,i])
+            mean = torch.mean(datas[:,i])
+            std = torch.std(datas[:,i])
             datas[:,i] = (datas[:,i] - mean) / std
 
         return datas
 
     def normalization(self, datas):
+        datas = datas.reshape(-1, datas.shape[-1])
         rows, cols = datas.shape
         for i in range(cols):
-            max = np.max(datas[:,i])
-            min = np.min(datas[:,i])
+            max = torch.max(datas[:,i])
+            min = torch.min(datas[:,i])
             datas[:,i] = (datas[:,i] - min ) / (max - min)
         return datas
 
     def load_unified_gaze_dataset(self, type='imu_'):        ## missing data in imu_lift_s1
         self.folders_num = 0
         for index, subDir in enumerate(tqdm(os.listdir(self.root), desc="Building gaze dataset")):
-                if type in subDir:
-                    self.folders_num += 1
-                    subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
-                    os.chdir(self.root + subDir)
-                    capture = cv2.VideoCapture(self.video_file)
-                    self.frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+            if type in subDir:
+                self.folders_num += 1
+                subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+                os.chdir(self.root + subDir)
+                capture = cv2.VideoCapture(self.video_file)
+                self.frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
-                    self.dataset = JSON_LOADER(subDir)
-                    self.dataset.POP_GAZE_DATA(self.frame_count)
-                    if Path('gaze_file.csv').is_file():
-                        _ = os.system('rm gaze_file.csv')
+                self.dataset = JSON_LOADER(subDir)
+                self.dataset.POP_GAZE_DATA(self.frame_count)
+                self.gaze_arr = np.array(self.dataset.var.gaze_data).transpose()
+                if not Path('gaze_file.csv').is_file():
+                    # print('new file wil')
+                    # _ = os.system('rm gaze_file.csv')
                     self.create_dataframes(subDir, 'gaze')
+
+                if not Path(self.root + 'folder_gazeExtracted_data_' + str(self.trim_size) + '.pt').is_file():
+                    # _ = os.system('rm folder_gazeExtracted_data_' + str(self.trim_size) + '.pt')
                     self.gaze_arr = np.array(self.dataset.var.gaze_data).transpose()
                     # print(gaze_arr)
                     self.temp = np.zeros((self.frame_count*4-self.trim_size*4*2, 2))
                     self.temp[:,0] = self.gaze_arr[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [0]])]
                     self.temp[:,1] = self.gaze_arr[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [1]])]
 
+
                     if self.folders_num > 1:
                         self.new = np.concatenate((self.last, self.temp), axis=0)
                     else:
                         self.new = self.temp
                     self.last = self.new
-                    with open(self.root + subDir + 'folder_gazeExtracted_data.npy', 'wb') as f:
-                        np.save(f, self.temp)
+                    # torch.save(torch.from_numpy(self.temp), 'folder_gazeExtracted_data_' + str(self.trim_size) + '.pt')
 
         return self.new
 
     def load_unified_frame_dataset(self, type='imu_'):
         self.folders_num = 0
-        sum = 0
-        sum1 = 0
         for index, subDir in enumerate(tqdm(os.listdir(self.root), desc="Building Image Dataset")):
-                if type in subDir:
-                    total_frames = 0
-                    self.folders_num += 1
-                    subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+            if type in subDir:
+                total_frames = 0
+                self.folders_num += 1
+                subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+                os.chdir(self.root + subDir)
+                self.capture = cv2.VideoCapture(self.video_file)
+                self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
+                if not Path(self.root + subDir + 'framesExtracted_data_' + str(self.trim_size) + '.npy').is_file():
+                    # _ = os.system('rm framesExtracted_data_' + str(self.trim_size) + '.pt')
                     os.chdir(self.root + subDir)
                     self.capture = cv2.VideoCapture(self.video_file)
                     self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                    if Path(self.root + subDir + 'framesExtracted_data.npy').is_file():
-                        with open(self.root + subDir + 'framesExtracted_data.npy', 'rb') as f:
-                            self.temp = np.load(f)
-                        # if self.folders_num > 1:
-                        #     self.new = np.concatenate((self.last, self.temp), axis=0)
-                        # else:
-                        #     self.new = self.temp
-                        sum += self.frame_count - self.trim_size*2
-                        sum1 += self.temp.shape[0]
-                        print(sum1, self.frame_count, sum, self.temp.shape)
-                        #
-                        # self.last = self.new
-                    else:
-                        os.chdir(self.root + subDir)
-                        self.capture = cv2.VideoCapture(self.video_file)
-                        self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
-                        print(subDir, self.frame_count)
-                        self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.trim_size)
-                        self.ret, self.last = self.capture.read()
-                        self.last = cv2.resize(self.last, (512, 512))
-                        total_frames = 1
-                        while self.ret:
-                            if total_frames > (self.frame_count - self.trim_size*2):
-                                break
-                            # cv2.imwrite(root + subDir + "frames/frame%d.jpg" % total_frames, frame)
-                            self.ret, self.new = self.capture.read()
-                            self.new = cv2.resize(self.new, (512, 512))
-                            total_frames += 1
+                    self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.trim_size)
+                    self.ret, self.last = self.capture.read()
+                    self.last = cv2.resize(self.last, (512, 512))
+                    total_frames = 1
+                    while self.ret:
+                        if total_frames == (self.frame_count - self.trim_size*2):
+                            break
+                        # cv2.imwrite(root + subDir + "frames/frame%d.jpg" % total_frames, frame)
+                        self.ret, self.new = self.capture.read()
+                        self.new = cv2.resize(self.new, (512, 512))
+                        total_frames += 1
 
-                            self.stack_frames.append(np.concatenate((self.last, self.new), axis=2))
-                            self.last = self.new
+                        self.stack_frames.append(np.concatenate((self.last, self.new), axis=2))
+                        self.last = self.new
 
-                        with open(self.root + subDir + 'framesExtracted_data.npy', 'wb') as f:
-                            np.save(f, self.stack_frames)
-                            self.stack_frames = []
+                    with open(self.root + subDir + 'framesExtracted_data_' + str(self.trim_size) + '.npy', 'wb') as f:
+                        np.save(f, self.stack_frames)
+                        self.stack_frames = []
 
         return self.new
 
     def load_unified_imu_dataset(self, type='imu_'):     ## missing data in imu_CoffeeVendingMachine_S2
         self.folders_num = 0
-        sum = 0
+        # sum = 0
         for index, subDir in enumerate(tqdm(os.listdir(self.root), desc="Building IMU Dataset")):
-                if type in subDir:
-                    self.folders_num += 1
-                    subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
-                    os.chdir(self.root + subDir)
-                    capture = cv2.VideoCapture(self.video_file)
-                    self.frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+            if type in subDir:
+                self.folders_num += 1
+                subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+                os.chdir(self.root + subDir)
+                capture = cv2.VideoCapture(self.video_file)
+                self.frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
-                    self.dataset = JSON_LOADER(subDir)
-                    self.dataset.POP_IMU_DATA(self.frame_count)
-                    if Path('imu_file.csv').is_file():
-                        _ = os.system('rm imu_file.csv')
-                    self.create_dataframes(subDir, 'imu')
+                self.dataset = JSON_LOADER(subDir)
+                self.dataset.POP_IMU_DATA(self.frame_count)
+                if not Path('imu_file.csv').is_file():
+                    # print('new file wil')
+                    # _ = os.system('rm imu_file.csv')
+                    self.create_dataframes(subDir, dframe_type='imu')
+
+                if  not Path(self.root + 'folder_imuExtracted_data_' + str(self.trim_size) + '.pt').is_file() :
+                    # _ = os.system('rm folder_imuExtracted_data_' + str(self.trim_size) + '.pt')
                     self.imu_arr_acc = np.array(self.dataset.var.imu_data_acc).transpose()
                     self.imu_arr_gyro = np.array(self.dataset.var.imu_data_gyro).transpose()
                     # print(gaze_arr)
@@ -155,22 +152,23 @@ class BUILDING_DATASETS:
                     self.temp[:,4] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [1]])]
                     self.temp[:,5] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [2]])]
 
+
                     if self.folders_num > 1:
                         self.new = np.concatenate((self.last, self.temp), axis=0)
                     else:
                         self.new = self.temp
 
                     self.last = self.new
-                    sum += self.frame_count - self.trim_size*2
-                    print(self.frame_count, sum, self.temp.shape)
-                    with open(self.root + subDir + 'folder_imuExtracted_data.npy', 'wb') as f:
-                        np.save(f, self.temp)
+                    # sum += self.frame_count - self.trim_size*2
+                    # print(self.frame_count, sum, self.temp.shape)
+                    # torch.save(torch.from_numpy(self.temp), 'folder_imuExtracted_data_' + str(self.trim_size) + '.pt')
 
         return self.new
 
     def create_dataframes(self, subDir, dframe_type, start_index=0):
         if dframe_type == 'gaze':
             ## GAZE
+            print(self.frame_count)
             for sec in range(self.frame_count):
                 self.panda_data[sec] = list(zip(self.dataset.var.gaze_data[0][start_index:start_index + 4], self.dataset.var.gaze_data[1][start_index:start_index+4]))
                 start_index += 4
@@ -202,7 +200,8 @@ if __name__ == "__main__":
     # dataset_folder = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
     # os.chdir(dataset_folder)
     dataframes = BUILDING_DATASETS(var.root, 150)
-    gaze_datas = dataframes.load_unified_gaze_dataset()
+
+    gaze_datas = dataframes.load_unified_gaze_dataset(type='imu_')
     # imu_datas= dataframes.load_unified_imu_dataset()
     # plt.subplot(221)
     # _ = plt.hist(imu_datas[:,0], bins='auto', label='before N')

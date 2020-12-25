@@ -46,10 +46,10 @@ class JSON_LOADER:
                 self.var.gaze_data[0].append(0.0)
                 self.var.gaze_data[1].append(0.0)
 
-        # if len(self.var.gaze_data[0])/4 < frame_count:
-        #     for i in range(len(self.var.gaze_data[0]), frame_count*4):
-        #         self.var.gaze_data[0].append(np.nan)
-        #         self.var.gaze_data[1].append(np.nan)
+        if len(self.var.gaze_data[0])/4 < frame_count:
+            for i in range(len(self.var.gaze_data[0]), frame_count*4):
+                self.var.gaze_data[0].append(np.nan)
+                self.var.gaze_data[1].append(np.nan)
 
         if return_val:
             return self.utils.get_sample_rate(self.var.timestamps_gaze)
@@ -87,38 +87,25 @@ class JSON_LOADER:
 
                         self.var.n_imu_samples -= 1
                         self.var.check_repeat = False
-                        # try:
-                        #     # if nT < 1.00 :
-                        #     print('rmv dup', utils.floor(self.var.timestamps_gaze[self.var.gaze_data_index]), self.var.timestamps_imu[-1], diff)
-                        #     self.var.gaze_data_index += 1
-                        # except:
-                        #     print(utils.floor(self.var.timestamps_gaze[self.var.gaze_data_index-1]),utils.floor(self.var.timestamps_imu[-1]))
                     elif (diff < 0.01):
                         self.var.check_repeat = True
-                        # print('var.check_repeat is true now')
                     else:
                         pass
-                        # try:
-                        #     # if nT < 1.00 :
-                        #     print('rmv dup', utils.floor(self.var.timestamps_gaze[self.var.gaze_data_index]), self.var.timestamps_imu[-1], diff)
-                        #     self.var.gaze_data_index += 1
-                        # except:
-                        #     print(utils.floor(self.var.timestamps_gaze[self.var.gaze_data_index-1]),utils.floor(self.var.timestamps_imu[-1]))
                     self.var.n_imu_samples += 1
                     oT = nT
             except Exception as e:
                 pass
 
 
-        # if len(self.var.imu_data_acc[0])/4 < frame_count:
-        #     for i in range(len(self.var.imu_data_acc[0]), frame_count*4):
-        #         self.var.imu_data_acc[0].append(np.nan)
-        #         self.var.imu_data_acc[1].append(np.nan)
-        #         self.var.imu_data_acc[2].append(np.nan)
-        #
-        #         self.var.imu_data_gyro[0].append(np.nan)
-        #         self.var.imu_data_gyro[1].append(np.nan)
-        #         self.var.imu_data_gyro[2].append(np.nan)
+        if len(self.var.imu_data_acc[0])/4 < frame_count:
+            for i in range(len(self.var.imu_data_acc[0]), frame_count*4):
+                self.var.imu_data_acc[0].append(np.nan)
+                self.var.imu_data_acc[1].append(np.nan)
+                self.var.imu_data_acc[2].append(np.nan)
+
+                self.var.imu_data_gyro[0].append(np.nan)
+                self.var.imu_data_gyro[1].append(np.nan)
+                self.var.imu_data_gyro[2].append(np.nan)
 
         if return_val:
             return self.utils.get_sample_rate(self.var.timestamps_imu)
