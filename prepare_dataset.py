@@ -34,25 +34,20 @@ class IMU_GAZE_FRAME_DATASET:
         self.dataset = BUILDING_DATASETS(self.root, trim_size)
         self.frame_datasets = None
         self.imu_datasets, self.gaze_datasets = None, None
-        # if Path(self.root + 'imuExtracted_data_' + str(trim_size) + '.pt').is_file():
-        #     print('Files exists')
-        #     self.imu_datasets = torch.load('imuExtracted_data_' + str(trim_size) + '.pt')
-        #     self.gaze_datasets = torch.load('gazeExtracted_data_' + str(trim_size) + '.pt')
-        # else:
-        #     print('saved files does not exis')
-        #     self.imu_datasets = self.dataset.load_unified_imu_dataset()
-        #     self.gaze_datasets = self.dataset.load_unified_gaze_dataset()
-        #     self.imu_datasets = torch.from_numpy(self.imu_datasets)
-        #     self.gaze_datasets = torch.from_numpy(self.gaze_datasets)
-        #     torch.save(torch.from_numpy(self.imu_datasets), self.root + 'imuExtracted_data_' + str(trim_size) + '.pt')
-        #     torch.save(torch.from_numpy(self.gaze_datasets), self.root + 'gazeExtracted_data_' + str(trim_size) + '.pt')
-        #
-        # self.frame_datasets = self.dataset.load_unified_frame_dataset()
+        if Path(self.root + 'imuExtracted_data_' + str(trim_size) + '.pt').is_file():
+            print('Files exists')
+            self.imu_datasets = torch.load('imuExtracted_data_' + str(trim_size) + '.pt')
+            self.gaze_datasets = torch.load('gazeExtracted_data_' + str(trim_size) + '.pt')
+        else:
+            print('saved files does not exis')
+            self.imu_datasets = self.dataset.load_unified_imu_dataset()
+            self.gaze_datasets = self.dataset.load_unified_gaze_dataset()
+            self.imu_datasets = torch.from_numpy(self.imu_datasets)
+            self.gaze_datasets = torch.from_numpy(self.gaze_datasets)
+            torch.save(torch.from_numpy(self.imu_datasets), self.root + 'imuExtracted_data_' + str(trim_size) + '.pt')
+            torch.save(torch.from_numpy(self.gaze_datasets), self.root + 'gazeExtracted_data_' + str(trim_size) + '.pt')
 
-        self.imu_datasets = self.dataset.load_unified_imu_dataset()
-        self.gaze_datasets = self.dataset.load_unified_gaze_dataset()
-        self.imu_datasets = torch.from_numpy(self.imu_datasets)
-        self.gaze_datasets = torch.from_numpy(self.gaze_datasets)
+        self.frame_datasets = self.dataset.load_unified_frame_dataset()
 
         if distribution == 'N':
             self.imu_datasets = self.dataset.normalization(self.imu_datasets)
