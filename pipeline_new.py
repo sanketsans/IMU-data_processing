@@ -150,8 +150,9 @@ if __name__ == "__main__":
                 unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, drop_last=True)
                 tqdm_trainLoader = tqdm(unified_dataloader)
                 for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_trainLoader):
+                    print
                     frame_data = frame_data.permute(0, 3, 1, 2)
-                    gaze_data = torch.sum(gaze_data, axis=1) / 4
+                    gaze_data = torch.sum(gaze_data, axis=1) / 8.0
                     coordinates = pipeline(frame_data, imu_data).to(device)
                     optimizer.zero_grad()
                     loss = loss_fn(coordinates, gaze_data.float())
