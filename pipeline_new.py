@@ -113,115 +113,114 @@ if __name__ == "__main__":
     uni_imu_dataset = uni_dataset.imu_datasets      ## will already be standarized
     uni_gaze_dataset = uni_dataset.gaze_datasets
 
-    print(uni_imu_dataset.shape)
 
-    # n_epochs = 10
-    # folders_num = 0
-    # start_index = 0
-    # current_loss = 1000.0
-    # optimizer = optim.SGD(pipeline.parameters(), lr=0.001, weight_decay=0.00001)
-    # loss_fn = nn.SmoothL1Loss()
-    # sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset = None, None, None
-    #
-    # for epoch in tqdm(range(n_epochs), desc="epochs"):
-        # for index, subDir in enumerate(sorted(os.listdir(pipeline.var.root))):
-        #     pipeline.init_stage()
-        #     if 'imu_' in subDir:
-        #         pipeline.train()
-        #         folders_num += 1
-        #         subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
-        #         os.chdir(pipeline.var.root + subDir)
-        #         capture = cv2.VideoCapture('scenevideo.mp4')
-        #         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-        #         end_index = start_index + frame_count - trim_frame_size*2 -1
-        #         sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
-        #         sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
-        #
-        #         with open('framesExtracted_data_' + str(trim_frame_size) + '.npy', 'rb') as f:
-        #             sliced_frame_dataset = np.load(f)
-        #             f.close()
-        #
-        #         unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset)
-        #         unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size)
-        #         tqdm_trainLoader = tqdm(unified_dataloader)
-        #         for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_trainLoader):
-        #             frame_data = frame_data.permute(0, 3, 1, 2)
-        #             gaze_data = torch.sum(gaze_data, axis=1) / 4
-        #             coordinates = pipeline(frame_data, imu_data).to(device)
-        #             optimizer.zero_grad()
-        #             loss = loss_fn(coordinates, gaze_data.float())
-        #             current_loss_mean_train = (current_loss_mean_train * batch_index + loss) / (batch_index + 1)
-        #             tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-        #                 current_loss_mean_train, optimizer.param_groups[0]['lr']))
-        #             loss.backward()
-        #             optimizer.step()
-        #
-        #             if (current_loss_mean_train < current_loss):
-        #                 current_loss = current_loss_mean_train
-        #             print('SAVING MODEL')
-        #             torch.save({
-        #                         'epoch': epoch,
-        #                         'model_state_dict': pipeline.state_dict(),
-        #                         'optimizer_state_dict': optimizer.state_dict(),
-        #                         'loss': current_loss_mean_train
-        #                         }, pipeline.var.root + 'pipeline_checkpoint.pth')
-        #
-        #         start_index = end_index + 1
-        #
-        #     if 'val_' in subDir:
-        #         pipeline.eval()
-        #         with torch.no_grad():
-        #             subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
-        #             os.chdir(pipeline.var.root + subDir)
-        #             capture = cv2.VideoCapture('scenevideo.mp4')
-        #             frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-        #             end_index = start_index + frame_count - trim_frame_size*2 -1
-        #             sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
-        #             sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
-        #
-        #             with open('framesExtracted_data_' + str(trim_frame_size) + '.npy', 'rb') as f:
-        #                 sliced_frame_dataset = np.load(f)
-        #                 f.close()
-        #
-        #             unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset)
-        #             unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size)
-        #             tqdm_valLoader = tqdm(unified_dataloader, desc="Validation")
-        #             for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_valLoader):
-        #                 frame_data = frame_data.permute(0, 3, 1, 2)
-        #                 gaze_data = torch.sum(gaze_data, axis=1) / 4
-        #                 coordinates = pipeline(frame_data, imu_data).to(device)
-        #                 loss = loss_fn(coordinates, gaze_data.float())
-        #                 current_loss_mean_val = (current_loss_mean_val * batch_index + loss) / (batch_index + 1)
-        #                 tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-        #                     current_loss_mean_val, optimizer.param_groups[0]['lr']))
-        #
-        #         start_index = end_index + 1
-        #
-        #     if 'test_' in subDir:
-        #         pipeline.eval()
-        #         with torch.no_grad():
-        #             subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
-        #             os.chdir(pipeline.var.root + subDir)
-        #             capture = cv2.VideoCapture('scenevideo.mp4')
-        #             frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-        #             end_index = start_index + frame_count - trim_frame_size*2 -1
-        #             sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
-        #             sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
-        #
-        #             with open('framesExtracted_data_' + str(trim_frame_size) + '.npy', 'rb') as f:
-        #                 sliced_frame_dataset = np.load(f)
-        #                 f.close()
-        #
-        #             unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset)
-        #             unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size)
-        #             tqdm_testLoader = tqdm(unified_dataloader, desc="Training")
-        #             for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_testLoader):
-        #                 frame_data = frame_data.permute(0, 3, 1, 2)
-        #                 gaze_data = torch.sum(gaze_data, axis=1) / 4
-        #                 coordinates = pipeline(frame_data, imu_data).to(device)
-        #                 loss = loss_fn(coordinates, gaze_data.float())
-        #                 current_loss_mean_test = (current_loss_mean_test * batch_index + loss) / (batch_index + 1)
-        #                 tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-        #                     current_loss_mean_test, optimizer.param_groups[0]['lr']))
-        #
-        #         start_index = end_index + 1
+    n_epochs = 10
+    folders_num = 0
+    start_index = 0
+    current_loss = 1000.0
+    optimizer = optim.SGD(pipeline.parameters(), lr=0.001, weight_decay=0.00001)
+    loss_fn = nn.SmoothL1Loss()
+    sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset = None, None, None
+
+    for epoch in tqdm(range(n_epochs), desc="epochs"):
+        for index, subDir in enumerate(sorted(os.listdir(pipeline.var.root))):
+            pipeline.init_stage()
+            if 'imu_' in subDir:
+                pipeline.train()
+                folders_num += 1
+                subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+                os.chdir(pipeline.var.root + subDir)
+                capture = cv2.VideoCapture('scenevideo.mp4')
+                frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+                end_index = start_index + frame_count - trim_frame_size*2 -1
+                sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
+                sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
+
+                with open('framesExtracted_data_' + str(trim_frame_size) + '.npy', 'rb') as f:
+                    sliced_frame_dataset = np.load(f)
+                    f.close()
+
+                unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset)
+                unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size)
+                tqdm_trainLoader = tqdm(unified_dataloader)
+                for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_trainLoader):
+                    frame_data = frame_data.permute(0, 3, 1, 2)
+                    gaze_data = torch.sum(gaze_data, axis=1) / 4
+                    coordinates = pipeline(frame_data, imu_data).to(device)
+                    optimizer.zero_grad()
+                    loss = loss_fn(coordinates, gaze_data.float())
+                    current_loss_mean_train = (current_loss_mean_train * batch_index + loss) / (batch_index + 1)
+                    tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6}'.format(
+                        current_loss_mean_train, optimizer.param_groups[0]['lr']))
+                    loss.backward()
+                    optimizer.step()
+
+                    if (current_loss_mean_train < current_loss):
+                        current_loss = current_loss_mean_train
+                    print('SAVING MODEL')
+                    torch.save({
+                                'epoch': epoch,
+                                'model_state_dict': pipeline.state_dict(),
+                                'optimizer_state_dict': optimizer.state_dict(),
+                                'loss': current_loss_mean_train
+                                }, pipeline.var.root + 'pipeline_checkpoint.pth')
+
+                start_index = end_index + 1
+
+            if 'val_' in subDir:
+                pipeline.eval()
+                with torch.no_grad():
+                    subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+                    os.chdir(pipeline.var.root + subDir)
+                    capture = cv2.VideoCapture('scenevideo.mp4')
+                    frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+                    end_index = start_index + frame_count - trim_frame_size*2 -1
+                    sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
+                    sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
+
+                    with open('framesExtracted_data_' + str(trim_frame_size) + '.npy', 'rb') as f:
+                        sliced_frame_dataset = np.load(f)
+                        f.close()
+
+                    unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset)
+                    unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size)
+                    tqdm_valLoader = tqdm(unified_dataloader, desc="Validation")
+                    for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_valLoader):
+                        frame_data = frame_data.permute(0, 3, 1, 2)
+                        gaze_data = torch.sum(gaze_data, axis=1) / 4
+                        coordinates = pipeline(frame_data, imu_data).to(device)
+                        loss = loss_fn(coordinates, gaze_data.float())
+                        current_loss_mean_val = (current_loss_mean_val * batch_index + loss) / (batch_index + 1)
+                        tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
+                            current_loss_mean_val, optimizer.param_groups[0]['lr']))
+
+                start_index = end_index + 1
+
+            if 'test_' in subDir:
+                pipeline.eval()
+                with torch.no_grad():
+                    subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+                    os.chdir(pipeline.var.root + subDir)
+                    capture = cv2.VideoCapture('scenevideo.mp4')
+                    frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+                    end_index = start_index + frame_count - trim_frame_size*2 -1
+                    sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
+                    sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
+
+                    with open('framesExtracted_data_' + str(trim_frame_size) + '.npy', 'rb') as f:
+                        sliced_frame_dataset = np.load(f)
+                        f.close()
+
+                    unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset)
+                    unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size)
+                    tqdm_testLoader = tqdm(unified_dataloader, desc="Training")
+                    for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_testLoader):
+                        frame_data = frame_data.permute(0, 3, 1, 2)
+                        gaze_data = torch.sum(gaze_data, axis=1) / 4
+                        coordinates = pipeline(frame_data, imu_data).to(device)
+                        loss = loss_fn(coordinates, gaze_data.float())
+                        current_loss_mean_test = (current_loss_mean_test * batch_index + loss) / (batch_index + 1)
+                        tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
+                            current_loss_mean_test, optimizer.param_groups[0]['lr']))
+
+                start_index = end_index + 1
