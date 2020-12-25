@@ -48,10 +48,10 @@ class BUILDING_DATASETS:
             datas[:,i] = (datas[:,i] - min ) / (max - min)
         return datas
 
-    def load_unified_gaze_dataset(self, type='imu_'):        ## missing data in imu_lift_s1
+    def load_unified_gaze_dataset(self):        ## missing data in imu_lift_s1
         self.folders_num = 0
-        for index, subDir in enumerate(tqdm(os.listdir(self.root), desc="Building gaze dataset")):
-            if type in subDir:
+        for index, subDir in enumerate(tqdm(sorted(os.listdir(self.root)), desc="Building gaze dataset")):
+            if 'imu_' in subDir or 'val_' in subDir or 'test_' in subDir:
                 self.folders_num += 1
                 subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
                 os.chdir(self.root + subDir)
@@ -67,6 +67,7 @@ class BUILDING_DATASETS:
                     self.create_dataframes(subDir, 'gaze')
 
                 if not Path(self.root + 'folder_gazeExtracted_data_' + str(self.trim_size) + '.pt').is_file():
+                    print(subDir)
                     # _ = os.system('rm folder_gazeExtracted_data_' + str(self.trim_size) + '.pt')
                     self.gaze_arr = np.array(self.dataset.var.gaze_data).transpose()
                     # print(gaze_arr)
@@ -84,10 +85,10 @@ class BUILDING_DATASETS:
 
         return self.new
 
-    def load_unified_frame_dataset(self, type='imu_'):
+    def load_unified_frame_dataset(self):
         self.folders_num = 0
-        for index, subDir in enumerate(tqdm(os.listdir(self.root), desc="Building Image Dataset")):
-            if type in subDir:
+        for index, subDir in enumerate(tqdm(sorted(os.listdir(self.root)), desc="Building Image Dataset")):
+            if 'imu_' in subDir or 'val_' in subDir or 'test_' in subDir:
                 total_frames = 0
                 self.folders_num += 1
                 subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
@@ -95,6 +96,7 @@ class BUILDING_DATASETS:
                 self.capture = cv2.VideoCapture(self.video_file)
                 self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
                 if not Path(self.root + subDir + 'framesExtracted_data_' + str(self.trim_size) + '.npy').is_file():
+                    print(subDir)
                     # _ = os.system('rm framesExtracted_data_' + str(self.trim_size) + '.pt')
                     os.chdir(self.root + subDir)
                     self.capture = cv2.VideoCapture(self.video_file)
@@ -121,11 +123,11 @@ class BUILDING_DATASETS:
 
         return self.new
 
-    def load_unified_imu_dataset(self, type='imu_'):     ## missing data in imu_CoffeeVendingMachine_S2
+    def load_unified_imu_dataset(self):     ## missing data in imu_CoffeeVendingMachine_S2
         self.folders_num = 0
         # sum = 0
-        for index, subDir in enumerate(tqdm(os.listdir(self.root), desc="Building IMU Dataset")):
-            if type in subDir:
+        for index, subDir in enumerate(tqdm(sorted(os.listdir(self.root)), desc="Building IMU Dataset")):
+            if 'imu_' in subDir or 'val_' in subDir or 'test_' in subDir:
                 self.folders_num += 1
                 subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
                 os.chdir(self.root + subDir)
@@ -139,7 +141,8 @@ class BUILDING_DATASETS:
                     # _ = os.system('rm imu_file.csv')
                     self.create_dataframes(subDir, dframe_type='imu')
 
-                if  not Path(self.root + 'folder_imuExtracted_data_' + str(self.trim_size) + '.pt').is_file() :
+                if  not Path(self.root + 'folder_imuExtracted_data_' + str(self.trim_size) + '.pt').is_file():
+                    print(subDir)
                     # _ = os.system('rm folder_imuExtracted_data_' + str(self.trim_size) + '.pt')
                     self.imu_arr_acc = np.array(self.dataset.var.imu_data_acc).transpose()
                     self.imu_arr_gyro = np.array(self.dataset.var.imu_data_gyro).transpose()

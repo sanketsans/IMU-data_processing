@@ -5,7 +5,6 @@ import pandas as pd
 import numpy as np
 import sys, os, ast
 sys.path.append('../')
-from getDataset import FRAME_IMU_DATASET
 from variables import RootVariables
 
 device = torch.device("cpu")
@@ -22,8 +21,6 @@ class IMU_ENCODER(nn.Module):
         self.fc = nn.Linear(hidden_size*2, num_classes).to(self.device)
 
     def forward(self, x, hidden):
-        # h0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(self.device)
-        # c0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(self.device)
         # hidden = (h0, c0)
         out, hidden = self.lstm(x, hidden)
         out = self.fc(out[:, -1, :])

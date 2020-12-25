@@ -29,9 +29,8 @@ class UNIFIED_DATASET(Dataset):
 
 
 class IMU_GAZE_FRAME_DATASET:
-    def __init__(self, root, trim_size, device = None, distribution='S'):
+    def __init__(self, root, trim_size, distribution='S'):
         self.root = root
-        self.device = device
         self.dataset = BUILDING_DATASETS(self.root, trim_size)
         self.frame_datasets = None
         self.imu_datasets, self.gaze_datasets = None, None
@@ -46,12 +45,13 @@ class IMU_GAZE_FRAME_DATASET:
             torch.save(torch.from_numpy(self.imu_datasets), self.root + 'imuExtracted_data_' + str(trim_size) + '.pt')
             torch.save(torch.from_numpy(self.gaze_datasets), self.root + 'gazeExtracted_data_' + str(trim_size) + '.pt')
 
-        self.frame_datasets = self.dataset.load_unified_frame_dataset('imu_')
+        self.frame_datasets = self.dataset.load_unified_frame_dataset()
 
         if distribution == 'N':
             self.imu_datasets = self.dataset.normalization(self.imu_datasets)
         else:
             self.imu_datasets = self.dataset.standarization(self.imu_datasets)
+
         self.gaze_datasets = self.gaze_datasets.reshape(-1, 4, self.gaze_datasets.shape[-1])
         self.imu_datasets = self.imu_datasets.reshape(-1, 4, self.imu_datasets.shape[-1])
 
