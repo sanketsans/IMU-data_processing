@@ -107,7 +107,7 @@ if __name__ == "__main__":
     model_checkpoint = 'pipeline_checkpoint.pth'
     flownet_checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
     trim_frame_size = 150
-    current_loss_mean_train, current_loss_mean_val, current_loss_mean_test = 0.0, 0.0,  0.0
+    # current_loss_mean_train, current_loss_mean_val, current_loss_mean_test = 0.0, 0.0,  0.0
     pipeline = FusionPipeline(args, flownet_checkpoint, trim_frame_size, device)
 
     uni_dataset = pipeline.prepare_dataset()
@@ -156,27 +156,26 @@ if __name__ == "__main__":
                     coordinates = pipeline(frame_data, imu_data).to(device)
                     optimizer.zero_grad()
                     loss = loss_fn(coordinates, gaze_data.float())
-                    current_loss_mean_train = (current_loss_mean_train * batch_index + loss) / (batch_index + 1)
-                    train_loss.append(current_loss_mean_train.detach())
+                    train_loss.append(loss.item())
                     tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} lowest: {}'.format(
-                        current_loss_mean_train, optimizer.param_groups[0]['lr'], current_loss))
+                        loss.item(), optimizer.param_groups[0]['lr'], current_loss))
                     loss.backward()
                     optimizer.step()
                     # break
 
-                    if (current_loss_mean_train < current_loss):
-                        current_loss = current_loss_mean_train
-                        torch.save({
-                                    'epoch': epoch,
-                                    'model_state_dict': pipeline.state_dict(),
-                                    'optimizer_state_dict': optimizer.state_dict(),
-                                    'loss': current_loss_mean_train
-                                    }, pipeline.var.root + model_checkpoint)
+                if (np.mean(train_loss) < current_loss):
+                    current_loss = np.mean(train_loss)
+                    torch.save({
+                                'epoch': epoch,
+                                'model_state_dict': pipeline.state_dict(),
+                                'optimizer_state_dict': optimizer.state_dict(),
+                                'loss': current_loss
+                                }, pipeline.var.root + model_checkpoint)
 
                 start_index = end_index + 1
                 with open(pipeline.var.root + 'train_loss.txt', 'a') as f:
                     for item in train_loss:
-                        f.write(str(train_loss) + '\n')
+                        f.write(str(item) + '\n')
 
             if 'val_' in subDir:
                 pipeline.eval()
@@ -193,18 +192,17 @@ if __name__ == "__main__":
                         sliced_frame_dataset = np.load(f)
                         f.close()
 
-                    unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset)
+                    unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, drop_last=True)
-                    tqdm_valLoader = tqdm(unified_dataloader, desc="Validation")
+                    tqdm_valLoader = tqdm(unified_dataloader)
                     for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_valLoader):
                         frame_data = frame_data.permute(0, 3, 1, 2)
                         gaze_data = torch.sum(gaze_data, axis=1) / 4
                         coordinates = pipeline(frame_data, imu_data).to(device)
                         loss = loss_fn(coordinates, gaze_data.float())
-                        current_loss_mean_val = (current_loss_mean_val * batch_index + loss) / (batch_index + 1)
-                        val_loss.append(current_loss_mean_val.detach())
+                        val_loss.append(loss.item())
                         tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                            current_loss_mean_val, optimizer.param_groups[0]['lr']))
+                            loss.item(), optimizer.param_groups[0]['lr']))
 
                 start_index = end_index + 1
                 with open(pipeline.var.root + 'val_loss.txt', 'a') as f:
@@ -226,20 +224,19 @@ if __name__ == "__main__":
                         sliced_frame_dataset = np.load(f)
                         f.close()
 
-                    unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset)
+                    unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, drop_last=True)
-                    tqdm_testLoader = tqdm(unified_dataloader, desc="Training")
+                    tqdm_testLoader = tqdm(unified_dataloader)
                     for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_testLoader):
                         frame_data = frame_data.permute(0, 3, 1, 2)
                         gaze_data = torch.sum(gaze_data, axis=1) / 4
                         coordinates = pipeline(frame_data, imu_data).to(device)
                         loss = loss_fn(coordinates, gaze_data.float())
-                        current_loss_mean_test = (current_loss_mean_test * batch_index + loss) / (batch_index + 1)
-                        test_loss.append(current_loss_mean_test.detach())
+                        test_loss.append(loss.item())
                         tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                            current_loss_mean_test, optimizer.param_groups[0]['lr']))
+                            loss.item(), optimizer.param_groups[0]['lr']))
 
                 start_index = end_index + 1
                 with open(pipeline.var.root + 'test_loss.txt', 'a') as f:
                     for item in test_loss:
-                        f.write(str(test_loss) + '\n')
+                        f.write(str(item) + '\n')
