@@ -37,9 +37,9 @@ class FusionPipeline(nn.Module):
         self.frameModel =  VIS_ENCODER(self.args, self.checkpoint_path, self.device)
 
         ## TEMPORAL MODELS
-        self.temporalModel = IMU_ENCODER(self.temporalSize, self.var.hidden_size, self.var.num_layers, self.var.num_classes*8, self.device)
+        self.temporalModel = IMU_ENCODER(self.temporalSize, self.var.hidden_size, self.var.num_layers, self.var.num_classes*4, self.device)
 
-        self.fc1 = nn.Linear(self.var.num_classes*8, 512).to(self.device)
+        self.fc1 = nn.Linear(self.var.num_classes*4, 512).to(self.device)
         self.fc2 = nn.Linear(512, 128).to(self.device)
         self.fc3 = nn.Linear(128, 2).to(self.device)
         # self.regressor = nn.Sequential(*[self.fc1, self.fc2, self.fc3])
@@ -118,9 +118,9 @@ if __name__ == "__main__":
     folders_num = 0
     start_index = 0
     current_loss = 1000.0
-    optimizer = optim.SGD(pipeline.parameters(), lr=0.001, weight_decay=0.00001)
+    optimizer = optim.SGD(pipeline.parameters(), lr=0.01, weight_decay=0.00001)
     loss_fn = nn.SmoothL1Loss()
-    sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset = None, None, None
+
     if Path(pipeline.var.root + model_checkpoint).is_file():
         checkpoint = torch.load(pipeline.var.root + model_checkpoint)
         pipeline.load_state_dict(checkpoint['model_state_dict'])
@@ -128,8 +128,9 @@ if __name__ == "__main__":
 
     for epoch in tqdm(range(n_epochs), desc="epochs"):
         for index, subDir in enumerate(sorted(os.listdir(pipeline.var.root))):
-            unified_dataset = None
-            train_loss, val_loss, test_loss = [], [], []
+            unified_dataset, unified_dataloader = None, None
+            sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset = None, None, None
+            train_loss, val_loss, test_loss = 0.0, 0.0, 0.0
             pipeline.init_stage()
             if 'imu_' in subDir:
                 pipeline.train()
@@ -147,7 +148,7 @@ if __name__ == "__main__":
                     f.close()
 
                 unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
-                unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, drop_last=True)
+                unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
                 tqdm_trainLoader = tqdm(unified_dataloader)
                 for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_trainLoader):
                     print
@@ -156,15 +157,15 @@ if __name__ == "__main__":
                     coordinates = pipeline(frame_data, imu_data).to(device)
                     optimizer.zero_grad()
                     loss = loss_fn(coordinates, gaze_data.float())
-                    train_loss.append(loss.item())
+                    train_loss += loss.item()
                     tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} lowest: {}'.format(
                         loss.item(), optimizer.param_groups[0]['lr'], current_loss))
                     loss.backward()
                     optimizer.step()
                     # break
 
-                if (np.mean(train_loss) < current_loss):
-                    current_loss = np.mean(train_loss)
+                if ((train_loss/len(unified_dataloader)) < current_loss):
+                    current_loss = (train_loss/len(unified_dataloader))
                     torch.save({
                                 'epoch': epoch,
                                 'model_state_dict': pipeline.state_dict(),
@@ -174,8 +175,7 @@ if __name__ == "__main__":
 
                 start_index = end_index + 1
                 with open(pipeline.var.root + 'train_loss.txt', 'a') as f:
-                    for item in train_loss:
-                        f.write(str(item) + '\n')
+                    f.write(str(train_loss/len(unified_dataloader)) + '\n')
 
             if 'val_' in subDir:
                 pipeline.eval()
@@ -193,21 +193,21 @@ if __name__ == "__main__":
                         f.close()
 
                     unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
-                    unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, drop_last=True)
+                    unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
                     tqdm_valLoader = tqdm(unified_dataloader)
                     for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_valLoader):
                         frame_data = frame_data.permute(0, 3, 1, 2)
                         gaze_data = torch.sum(gaze_data, axis=1) / 4
                         coordinates = pipeline(frame_data, imu_data).to(device)
                         loss = loss_fn(coordinates, gaze_data.float())
-                        val_loss.append(loss.item())
+                        val_loss += loss.item()
                         tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
                             loss.item(), optimizer.param_groups[0]['lr']))
 
+                    with open(pipeline.var.root + 'val_loss.txt', 'a') as f:
+                        f.write(str(val_loss/len(unified_dataloader)) + '\n')
+
                 start_index = end_index + 1
-                with open(pipeline.var.root + 'val_loss.txt', 'a') as f:
-                    for item in val_loss:
-                        f.write(str(item) + '\n')
 
             if 'test_' in subDir:
                 pipeline.eval()
@@ -225,18 +225,18 @@ if __name__ == "__main__":
                         f.close()
 
                     unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
-                    unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, drop_last=True)
+                    unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
                     tqdm_testLoader = tqdm(unified_dataloader)
                     for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_testLoader):
                         frame_data = frame_data.permute(0, 3, 1, 2)
                         gaze_data = torch.sum(gaze_data, axis=1) / 4
                         coordinates = pipeline(frame_data, imu_data).to(device)
                         loss = loss_fn(coordinates, gaze_data.float())
-                        test_loss.append(loss.item())
+                        test_loss += loss.item()
                         tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
                             loss.item(), optimizer.param_groups[0]['lr']))
 
-                start_index = end_index + 1
-                with open(pipeline.var.root + 'test_loss.txt', 'a') as f:
-                    for item in test_loss:
-                        f.write(str(item) + '\n')
+                    with open(pipeline.var.root + 'test_loss.txt', 'a') as f:
+                        f.write(str(test_loss/len(unified_dataloader)) + '\n')
+
+                start_index = end_index + 1)
