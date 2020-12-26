@@ -22,7 +22,7 @@ class UNIFIED_DATASET(Dataset):
         self.device = device
 
     def __len__(self):
-        return len(self.imu_data)
+        return len(self.imu_data) -1
 
     def __getitem__(self, index):
         return torch.from_numpy(self.frame_data[index]).to(self.device), torch.from_numpy(np.concatenate((self.imu_data[index], self.imu_data[index+1]), axis=0)).to(self.device), torch.from_numpy(np.concatenate((self.gaze_data[index], self.gaze_data[index+1]), axis=0)).to(self.device)
