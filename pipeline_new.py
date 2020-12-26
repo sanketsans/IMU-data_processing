@@ -114,7 +114,7 @@ if __name__ == "__main__":
     uni_imu_dataset = uni_dataset.imu_datasets      ## will already be standarized
     uni_gaze_dataset = uni_dataset.gaze_datasets
 
-    n_epochs = 10
+    n_epochs = 5
     folders_num = 0
     start_index = 0
     current_loss = 1000.0
@@ -175,6 +175,7 @@ if __name__ == "__main__":
                 start_index = end_index + 1
                 with open(pipeline.var.root + 'train_loss.txt', 'a') as f:
                     f.write(str(train_loss/len(unified_dataloader)) + '\n')
+                    f.close()
 
             if 'val_' in subDir:
                 pipeline.eval()
@@ -201,8 +202,9 @@ if __name__ == "__main__":
                         tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
                             loss.detach().item(), optimizer.param_groups[0]['lr']))
 
-                    with open(pipeline.var.root + 'val_loss.txt', 'a') as f:
+                    with open(pipeline.var.root + 'validation_loss.txt', 'a') as f:
                         f.write(str(val_loss/len(unified_dataloader)) + '\n')
+                        f.close()
 
                 start_index = end_index + 1
 
@@ -231,7 +233,8 @@ if __name__ == "__main__":
                         tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
                             loss.detach().item(), optimizer.param_groups[0]['lr']))
 
-                    with open(pipeline.var.root + 'test_loss.txt', 'a') as f:
+                    with open(pipeline.var.root + 'testing_loss.txt', 'a') as f:
                         f.write(str(test_loss/len(unified_dataloader)) + '\n')
+                        f.close()
 
-                start_index = end_index + 1)
+                start_index = end_index + 1
