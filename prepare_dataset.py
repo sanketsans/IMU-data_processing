@@ -1,6 +1,5 @@
 import torch
 from torch.utils.data import Dataset
-from torchvision import transforms
 import pandas as pd
 import sys, ast, os
 import numpy as np
@@ -12,10 +11,12 @@ import pickle as pkl
 sys.path.append('../')
 from variables import Variables, RootVariables
 from build_dataset import BUILDING_DATASETS
+from torchvision import transforms
 
 ## save the extracted dataset in each folder.
 class UNIFIED_DATASET(Dataset):
     def __init__(self, frame_data, imu_data, gaze_data, device=None):
+        self.transforms = transforms.Compose([transforms.ToTensor()])
         self.frame_data = frame_data
         self.imu_data = imu_data
         self.gaze_data = gaze_data
@@ -25,7 +26,8 @@ class UNIFIED_DATASET(Dataset):
         return len(self.imu_data) -1
 
     def __getitem__(self, index):
-        return torch.from_numpy(self.frame_data[index]).to(self.device), torch.from_numpy(np.concatenate((self.imu_data[index], self.imu_data[index+1]), axis=0)).to(self.device), torch.from_numpy(np.concatenate((self.gaze_data[index], self.gaze_data[index+1]), axis=0)).to(self.device)
+        # return self.frame_data[index].to(self.device), torch.from_numpy(np.concatenate((self.imu_data[index], self.imu_data[index+1]), axis=0)).to(self.device), torch.from_numpy(np.concatenate((self.gaze_data[index], self.gaze_data[index+1]), axis=0)).to(self.device)
+        return self.transforms(self.frame_data[index]).to(self.device), torch.from_numpy(np.concatenate((self.imu_data[index], self.imu_data[index+1]), axis=0)).to(self.device), torch.from_numpy(np.concatenate((self.gaze_data[index], self.gaze_data[index+1]), axis=0)).to(self.device)
 
 
 class IMU_GAZE_FRAME_DATASET:
@@ -44,8 +46,8 @@ class IMU_GAZE_FRAME_DATASET:
             self.gaze_datasets = self.dataset.load_unified_gaze_dataset()
             self.imu_datasets = torch.from_numpy(self.imu_datasets)
             self.gaze_datasets = torch.from_numpy(self.gaze_datasets)
-            torch.save(torch.from_numpy(self.imu_datasets), self.root + 'imuExtracted_data_' + str(trim_size) + '.pt')
-            torch.save(torch.from_numpy(self.gaze_datasets), self.root + 'gazeExtracted_data_' + str(trim_size) + '.pt')
+            torch.save(self.imu_datasets, self.root + 'imuExtracted_data_' + str(trim_size) + '.pt')
+            torch.save(self.gaze_datasets, self.root + 'gazeExtracted_data_' + str(trim_size) + '.pt')
 
         self.frame_datasets = self.dataset.load_unified_frame_dataset()
 

@@ -25,6 +25,7 @@ class BUILDING_DATASETS:
         self.frame_count = 0
         self.capture = None
         self.ret = None
+        self.transforms = transforms.Compose([transforms.ToTensor()])
         self.stack_frames = []
 
         self.panda_data = {}
@@ -95,15 +96,15 @@ class BUILDING_DATASETS:
                 os.chdir(self.root + subDir)
                 self.capture = cv2.VideoCapture(self.video_file)
                 self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                if not Path(self.root + subDir + 'framesExtracted_data_' + str(self.trim_size) + '.npy').is_file():
+                if not Path(self.root + 'folder_gazeExtracted_data_' + str(self.trim_size) + '.npy').is_file():
                     print(subDir)
-                    # _ = os.system('rm framesExtracted_data_' + str(self.trim_size) + '.pt')
                     os.chdir(self.root + subDir)
                     self.capture = cv2.VideoCapture(self.video_file)
                     self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
                     self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.trim_size)
                     self.ret, self.last = self.capture.read()
+                    self.last = cv2.cvtColor(self.last, cv2.COLOR_BGR2RGB)
                     self.last = cv2.resize(self.last, (512, 512))
                     total_frames = 1
                     while self.ret:
@@ -111,15 +112,20 @@ class BUILDING_DATASETS:
                             break
                         # cv2.imwrite(root + subDir + "frames/frame%d.jpg" % total_frames, frame)
                         self.ret, self.new = self.capture.read()
+                        self.new = cv2.cvtColor(self.new, cv2.COLOR_BGR2RGB)
                         self.new = cv2.resize(self.new, (512, 512))
                         total_frames += 1
 
+
                         self.stack_frames.append(np.concatenate((self.last, self.new), axis=2))
+                        # self.stack_frames.append((torch.cat((self.last, self.new), axis=0)).detach().cpu().numpy())
                         self.last = self.new
 
                     with open(self.root + subDir + 'framesExtracted_data_' + str(self.trim_size) + '.npy', 'wb') as f:
                         np.save(f, self.stack_frames)
-                        self.stack_frames = []
+                        f.close()
+
+                    self.stack_frames = []
 
         return self.new
 

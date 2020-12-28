@@ -114,17 +114,18 @@ if __name__ == "__main__":
     uni_imu_dataset = uni_dataset.imu_datasets      ## will already be standarized
     uni_gaze_dataset = uni_dataset.gaze_datasets
 
-    n_epochs = 5
+    n_epochs = 0
     folders_num = 0
     start_index = 0
     current_loss = 1000.0
-    optimizer = optim.SGD(pipeline.parameters(), lr=0.01, weight_decay=0.00001)
-    loss_fn = nn.SmoothL1Loss()
+    optimizer = optim.SGD(pipeline.parameters(), lr=0.01, momentum=0.9)
+    loss_fn = nn.MSELoss()
 
     if Path(pipeline.var.root + model_checkpoint).is_file():
         checkpoint = torch.load(pipeline.var.root + model_checkpoint)
         pipeline.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        current_loss = checkpoint['loss']
 
     for epoch in tqdm(range(n_epochs), desc="epochs"):
         start_index = 0
@@ -145,6 +146,7 @@ if __name__ == "__main__":
                 sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
                 sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
 
+                # sliced_frame_dataset = torch.load('framesExtracted_data_' + str(trim_frame_size) + '.pt')
                 sliced_frame_dataset = np.load('framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
 
                 unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
@@ -188,7 +190,9 @@ if __name__ == "__main__":
                     sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
                     sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
 
-                    sliced_frame_dataset = np.load('framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
+
+
+                    # sliced_frame_dataset = np.load('framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
 
                     unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
