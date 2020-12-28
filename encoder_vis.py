@@ -19,12 +19,12 @@ class VIS_ENCODER(nn.Module):
         self.net = FlowNetS.FlowNetS(args, input_channels, batch_norm)
         dict = torch.load(checkpoint_path)
         self.net.load_state_dict(dict["state_dict"])
-        self.net = nn.Sequential(*list(self.net.children())[0:10]).to(self.device)
-        for i in range(len(self.net) - 1):
-            self.net[i][1] = nn.ReLU()
+        self.net = nn.Sequential(*list(self.net.children())[0:9]).to(self.device)
+        # for i in range(len(self.net) - 1):
+        #     self.net[i][1] = nn.ReLU()
         self.fc = nn.Linear(8192*8, 1024).to(self.device)
         # self.net[8][1] = nn.ReLU(inplace=False)
-        self.net[9] = self.net[9][0]
+        # self.net[9] = self.net[9][0]
 
         for params in self.net.parameters():
             params.requires_grad = True

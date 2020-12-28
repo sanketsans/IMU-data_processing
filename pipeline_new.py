@@ -40,8 +40,7 @@ class FusionPipeline(nn.Module):
         self.temporalModel = IMU_ENCODER(self.temporalSize, self.var.hidden_size, self.var.num_layers, self.var.num_classes*4, self.device)
 
         self.fc1 = nn.Linear(self.var.num_classes*4, 512).to(self.device)
-        self.fc2 = nn.Linear(512, 128).to(self.device)
-        self.fc3 = nn.Linear(128, 2).to(self.device)
+        self.fc2 = nn.Linear(512, 2).to(self.device)
         # self.regressor = nn.Sequential(*[self.fc1, self.fc2, self.fc3])
 
         ##OTHER
@@ -82,8 +81,7 @@ class FusionPipeline(nn.Module):
         newParams = fused_params.reshape(fused_params.shape[0], self.temporalSeq, self.temporalSize)
         tempOut, (h0, c0) = self.temporalModel(newParams.float(), (self.tempModel_h0, self.tempModel_c0))
         regOut_1 = F.relu(self.fc1(tempOut)).to(self.device)
-        regOut_2 = F.relu(self.fc2(regOut_1)).to(self.device)
-        gaze_pred = self.activation(self.fc3(regOut_2)).to(self.device)
+        gaze_pred = self.activation(self.fc2(regOut_1)).to(self.device)
 
         self.tempModel_h0, self.tempModel_c0 = h0.detach(), c0.detach()
 
@@ -95,7 +93,7 @@ class FusionPipeline(nn.Module):
         fused = pipeline.get_fusion_params(imu_params, frame_params)
         coordinate = pipeline.temporal_modelling(fused)
 
-        return torch.round(coordinate*100)/100.0
+        return coordinate
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -156,16 +154,18 @@ if __name__ == "__main__":
                 tqdm_trainLoader = tqdm(unified_dataloader)
                 for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_trainLoader):
                     # frame_data = frame_data.permute(0, 3, 1, 2)
-                    gaze_data = torch.round((torch.sum(gaze_data, axis=1) / 8.0)*100)/100.0
+                    gaze_data = torch.sum(gaze_data, axis=1) / 8.0
                     coordinates = pipeline(frame_data, imu_data).to(device)
                     optimizer.zero_grad()
-                    loss = loss_fn(coordinates, gaze_data)
+                    loss = loss_fn(coordinates, gaze_data.float())
                     train_loss += loss.detach().item()
                     tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} lowest: {}'.format(
                         loss.detach().item(), optimizer.param_groups[0]['lr'], current_loss))
                     loss.backward()
                     optimizer.step()
                     # break
+
+                correct = (coordinate == gaze_data.float()).float().sum()
 
                 if ((train_loss/len(unified_dataloader)) < current_loss):
                     current_loss = (train_loss/len(unified_dataloader))
@@ -199,7 +199,7 @@ if __name__ == "__main__":
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
                     tqdm_valLoader = tqdm(unified_dataloader)
                     for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_valLoader):
-                        gaze_data = torch.round((torch.sum(gaze_data, axis=1) / 8.0)*100)/100.0
+                        gaze_data = torch.sum(gaze_data, axis=1) / 8.0
                         coordinates = pipeline(frame_data, imu_data).to(device)
                         loss = loss_fn(coordinates, gaze_data.float())
                         val_loss += loss.detach().item()
@@ -229,7 +229,7 @@ if __name__ == "__main__":
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
                     tqdm_testLoader = tqdm(unified_dataloader)
                     for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_testLoader):
-                        gaze_data = torch.round((torch.sum(gaze_data, axis=1) / 8.0)*100)/100.0
+                        gaze_data = torch.sum(gaze_data, axis=1) / 8.0
                         coordinates = pipeline(frame_data, imu_data).to(device)
                         loss = loss_fn(coordinates, gaze_data.float())
                         test_loss += loss.detach().item()
@@ -241,3 +241,12 @@ if __name__ == "__main__":
                         f.close()
 
                 start_index = end_index + 1
+
+        if epoch % 5 == 0:
+            torch.save({
+                        'epoch': epoch,
+                        'model_state_dict': pipeline.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'loss': current_loss
+                        }, pipeline.var.root + model_checkpoint)
+            print('Model saved')
