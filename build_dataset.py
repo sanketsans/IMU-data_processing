@@ -25,7 +25,6 @@ class BUILDING_DATASETS:
         self.frame_count = 0
         self.capture = None
         self.ret = None
-        self.transforms = transforms.Compose([transforms.ToTensor()])
         self.stack_frames = []
 
         self.panda_data = {}
@@ -96,8 +95,9 @@ class BUILDING_DATASETS:
                 os.chdir(self.root + subDir)
                 self.capture = cv2.VideoCapture(self.video_file)
                 self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                if not Path(self.root + 'folder_gazeExtracted_data_' + str(self.trim_size) + '.npy').is_file():
+                if not Path('framesExtracted_data_' + str(self.trim_size) + '.npy').is_file():
                     print(subDir)
+                    # _ = os.system('rm folder_imuExtracted_data_' + str(self.trim_size) + '.npy')
                     os.chdir(self.root + subDir)
                     self.capture = cv2.VideoCapture(self.video_file)
                     self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -120,6 +120,7 @@ class BUILDING_DATASETS:
                         self.stack_frames.append(np.concatenate((self.last, self.new), axis=2))
                         # self.stack_frames.append((torch.cat((self.last, self.new), axis=0)).detach().cpu().numpy())
                         self.last = self.new
+                    break
 
                     with open(self.root + subDir + 'framesExtracted_data_' + str(self.trim_size) + '.npy', 'wb') as f:
                         np.save(f, self.stack_frames)
@@ -145,6 +146,7 @@ class BUILDING_DATASETS:
                 if not Path('imu_file.csv').is_file():
                     # print('new file wil')
                     # _ = os.system('rm imu_file.csv')
+                    # _ = os.system('rm gaze_file.csv')
                     self.create_dataframes(subDir, dframe_type='imu')
 
                 if  not Path(self.root + 'folder_imuExtracted_data_' + str(self.trim_size) + '.pt').is_file():
