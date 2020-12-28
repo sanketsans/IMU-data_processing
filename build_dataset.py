@@ -64,9 +64,10 @@ class BUILDING_DATASETS:
                 if not Path('gaze_file.csv').is_file():
                     # print('new file wil')
                     # _ = os.system('rm gaze_file.csv')
+                    # _ = os.system('rm imu_file.csv')
                     self.create_dataframes(subDir, 'gaze')
 
-                if not Path(self.root + 'folder_gazeExtracted_data_' + str(self.trim_size) + '.pt').is_file():
+                if not Path(self.root + 'gazeExtracted_data_' + str(self.trim_size) + '.pt').is_file():
                     print(subDir)
                     # _ = os.system('rm folder_gazeExtracted_data_' + str(self.trim_size) + '.pt')
                     self.gaze_arr = np.array(self.dataset.var.gaze_data).transpose()
@@ -149,7 +150,7 @@ class BUILDING_DATASETS:
                     # _ = os.system('rm gaze_file.csv')
                     self.create_dataframes(subDir, dframe_type='imu')
 
-                if  not Path(self.root + 'folder_imuExtracted_data_' + str(self.trim_size) + '.pt').is_file():
+                if  not Path(self.root + 'imuExtracted_data_' + str(self.trim_size) + '.pt').is_file():
                     print(subDir)
                     # _ = os.system('rm folder_imuExtracted_data_' + str(self.trim_size) + '.pt')
                     self.imu_arr_acc = np.array(self.dataset.var.imu_data_acc).transpose()
