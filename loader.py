@@ -36,7 +36,7 @@ class JSON_LOADER:
                 if(float(data['timestamp']) > 0.000000000 and float(data['timestamp']) < 600.0):
                     nT = self.utils.floor(data['timestamp'])
                     # diff = round(nT - oT, 2)
-                    if (0.0 <= float(data['data']['gaze2d'][0]) < =1.0):
+                    if (0.0 <= float(data['data']['gaze2d'][0]) <= 1.0):
                         self.var.gaze_data[0].append(float(data['data']['gaze2d'][0]))
                         self.var.gaze_data[1].append(float(data['data']['gaze2d'][1]))
                     else:
