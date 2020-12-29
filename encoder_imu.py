@@ -17,7 +17,7 @@ class IMU_ENCODER(nn.Module):
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=True).to(self.device)
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, dropout=0.2, bidirectional=True).to(self.device)
         self.fc = nn.Linear(hidden_size*2, num_classes).to(self.device)
 
     def forward(self, x, hidden):

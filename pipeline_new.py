@@ -117,7 +117,7 @@ if __name__ == "__main__":
     start_index = 0
     current_loss = 1000.0
     optimizer = optim.SGD(pipeline.parameters(), lr=0.01, momentum=0.9, weight_decay=0.00001)
-    loss_fn = nn.SMoothL1Loss()
+    loss_fn = nn.SmoothL1Loss()
 
     if Path(pipeline.var.root + model_checkpoint).is_file():
         checkpoint = torch.load(pipeline.var.root + model_checkpoint)

@@ -56,7 +56,7 @@ class IMU_GAZE_FRAME_DATASET:
         else:
             self.imu_datasets = self.dataset.standarization(self.imu_datasets)
 
-        self.gaze_datasets = self.dataset.normalization(self.gaze_datasets)
+        #self.gaze_datasets = self.dataset.normalization(self.gaze_datasets)
 
         self.gaze_datasets = self.gaze_datasets.reshape(-1, 4, self.gaze_datasets.shape[-1])
         self.imu_datasets = self.imu_datasets.reshape(-1, 4, self.imu_datasets.shape[-1])

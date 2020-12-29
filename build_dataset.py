@@ -121,7 +121,6 @@ class BUILDING_DATASETS:
                         self.stack_frames.append(np.concatenate((self.last, self.new), axis=2))
                         # self.stack_frames.append((torch.cat((self.last, self.new), axis=0)).detach().cpu().numpy())
                         self.last = self.new
-                    break
 
                     with open(self.root + subDir + 'framesExtracted_data_' + str(self.trim_size) + '.npy', 'wb') as f:
                         np.save(f, self.stack_frames)
