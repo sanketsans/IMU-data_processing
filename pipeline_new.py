@@ -116,8 +116,8 @@ if __name__ == "__main__":
     folders_num = 0
     start_index = 0
     current_loss = 1000.0
-    optimizer = optim.SGD(pipeline.parameters(), lr=0.01, momentum=0.9)
-    loss_fn = nn.MSELoss()
+    optimizer = optim.SGD(pipeline.parameters(), lr=0.01, momentum=0.9, weight_decay=0.00001)
+    loss_fn = nn.SMoothL1Loss()
 
     if Path(pipeline.var.root + model_checkpoint).is_file():
         checkpoint = torch.load(pipeline.var.root + model_checkpoint)
@@ -158,14 +158,12 @@ if __name__ == "__main__":
                     coordinates = pipeline(frame_data, imu_data).to(device)
                     optimizer.zero_grad()
                     loss = loss_fn(coordinates, gaze_data.float())
-                    train_loss += loss.detach().item()
+                    train_loss += loss.item()
                     tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} lowest: {}'.format(
-                        loss.detach().item(), optimizer.param_groups[0]['lr'], current_loss))
+                        loss.item(), optimizer.param_groups[0]['lr'], current_loss))
                     loss.backward()
                     optimizer.step()
                     # break
-
-                correct = (coordinate == gaze_data.float()).float().sum()
 
                 if ((train_loss/len(unified_dataloader)) < current_loss):
                     current_loss = (train_loss/len(unified_dataloader))
@@ -202,9 +200,9 @@ if __name__ == "__main__":
                         gaze_data = torch.sum(gaze_data, axis=1) / 8.0
                         coordinates = pipeline(frame_data, imu_data).to(device)
                         loss = loss_fn(coordinates, gaze_data.float())
-                        val_loss += loss.detach().item()
+                        val_loss += loss.item()
                         tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                            loss.detach().item(), optimizer.param_groups[0]['lr']))
+                            loss.item(), optimizer.param_groups[0]['lr']))
 
                     with open(pipeline.var.root + 'validation_loss.txt', 'a') as f:
                         f.write(str(val_loss/len(unified_dataloader)) + '\n')
@@ -232,9 +230,9 @@ if __name__ == "__main__":
                         gaze_data = torch.sum(gaze_data, axis=1) / 8.0
                         coordinates = pipeline(frame_data, imu_data).to(device)
                         loss = loss_fn(coordinates, gaze_data.float())
-                        test_loss += loss.detach().item()
+                        test_loss += loss.item()
                         tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                            loss.detach().item(), optimizer.param_groups[0]['lr']))
+                            loss.item(), optimizer.param_groups[0]['lr']))
 
                     with open(pipeline.var.root + 'testing_loss.txt', 'a') as f:
                         f.write(str(test_loss/len(unified_dataloader)) + '\n')

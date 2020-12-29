@@ -36,8 +36,13 @@ class JSON_LOADER:
                 if(float(data['timestamp']) > 0.000000000 and float(data['timestamp']) < 600.0):
                     nT = self.utils.floor(data['timestamp'])
                     # diff = round(nT - oT, 2)
-                    self.var.gaze_data[0].append(float(data['data']['gaze2d'][0]))
-                    self.var.gaze_data[1].append(float(data['data']['gaze2d'][1]))
+                    if (0.0 <= float(data['data']['gaze2d'][0]) <= 1.0) or (0.0 <= float(data['data']['gaze2d'][1]) <= 1.0):
+                        self.var.gaze_data[0].append(float(data['data']['gaze2d'][0]))
+                        self.var.gaze_data[1].append(float(data['data']['gaze2d'][1]))
+                    else:
+                        self.var.gaze_data[0].append(0.0)
+                        self.var.gaze_data[1].append(0.0)
+
                     self.var.timestamps_gaze.append(nT)
                     self.var.n_gaze_samples += 1
                     oT = nT
@@ -45,6 +50,7 @@ class JSON_LOADER:
                 self.var.timestamps_gaze.append(nT)
                 self.var.gaze_data[0].append(0.0)
                 self.var.gaze_data[1].append(0.0)
+                oT = nT
 
         if len(self.var.gaze_data[0])/4 < frame_count:
             for i in range(len(self.var.gaze_data[0]), frame_count*4):
@@ -59,7 +65,7 @@ class JSON_LOADER:
 
         for index, data in enumerate(self.var.imu_dataList):
             try:
-                if(float(data['timestamp']) > 0.000 and float(data['timestamp']) < 600.00):
+                if(float(data['timestamp']) > 0.00000 and float(data['timestamp']) < 600.00):
                     nT = self.utils.floor(data['timestamp'])
                     diff = round((nT - oT), 2)
                     # print(nT)

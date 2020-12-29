@@ -21,3 +21,20 @@ if __name__ == "__main__":
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         current_loss = checkpoint['loss']
         print('Model loaded')
+
+    for index, subDir in enumerate(sorted(os.listdir(pipeline.var.root))):
+        pipeline.init_stage()
+        if 'imu_' in subDir:
+            subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+            os.chdir(pipeline.var.root + subDir)
+            capture = cv2.VideoCapture('scenevideo.mp4')
+            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+            end_index = start_index + frame_count - trim_frame_size*2 -1
+        if 'test_' in subDir:
+            subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+            os.chdir(pipeline.var.root + subDir)
+            capture = cv2.VideoCapture('scenevideo.mp4')
+            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+            end_index = start_index + frame_count - trim_frame_size*2 -1
+
+        start_index = end_index + 1
