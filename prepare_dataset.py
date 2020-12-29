@@ -49,7 +49,7 @@ class IMU_GAZE_FRAME_DATASET:
             torch.save(self.imu_datasets, self.root + 'imuExtracted_data_' + str(trim_size) + '.pt')
             torch.save(self.gaze_datasets, self.root + 'gazeExtracted_data_' + str(trim_size) + '.pt')
 
-        self.frame_datasets = self.dataset.load_unified_frame_dataset()
+       self.frame_datasets = self.dataset.load_unified_frame_dataset()
 
         if distribution == 'N':
             self.imu_datasets = self.dataset.normalization(self.imu_datasets)

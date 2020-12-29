@@ -89,9 +89,9 @@ class FusionPipeline(nn.Module):
 
     def forward(self, batch_frame_data, batch_imu_data):
         # frame_imu_trainLoader = self.get_dataset_dataloader(folder)
-        imu_params, frame_params = pipeline.get_encoder_params(batch_imu_data, batch_frame_data)
-        fused = pipeline.get_fusion_params(imu_params, frame_params)
-        coordinate = pipeline.temporal_modelling(fused)
+        imu_params, frame_params = self.get_encoder_params(batch_imu_data, batch_frame_data)
+        fused = self.get_fusion_params(imu_params, frame_params)
+        coordinate = self.temporal_modelling(fused)
 
         return coordinate
 
@@ -158,7 +158,7 @@ if __name__ == "__main__":
                     coordinates = pipeline(frame_data, imu_data).to(device)
                     optimizer.zero_grad()
                     loss = loss_fn(coordinates, gaze_data.float())
-                    train_loss += loss.item()
+                    train_loss += loss().item()
                     tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} lowest: {}'.format(
                         loss.item(), optimizer.param_groups[0]['lr'], current_loss))
                     loss.backward()
