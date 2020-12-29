@@ -12,8 +12,9 @@ from variables import RootVariables
 import matplotlib.pyplot as plt
 
 class BUILDING_DATASETS:
-    def __init__(self, root, trim_frame_size):
+    def __init__(self, root, frame_size, trim_frame_size):
         self.root = root
+        self.frame_size = frame_size
         self.trim_size = trim_frame_size
         self.dataset = None
         self.imu_arr_acc, self.imu_arr_gyro, self.gaze_array = None, None, None
@@ -87,6 +88,7 @@ class BUILDING_DATASETS:
         return self.new
 
     def load_unified_frame_dataset(self):
+        ## INCLUDES THE LAST FRAME
         self.folders_num = 0
         for index, subDir in enumerate(tqdm(sorted(os.listdir(self.root)), desc="Building Image Dataset")):
             if 'imu_' in subDir or 'val_' in subDir or 'test_' in subDir:
@@ -96,9 +98,9 @@ class BUILDING_DATASETS:
                 os.chdir(self.root + subDir)
                 self.capture = cv2.VideoCapture(self.video_file)
                 self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                if not Path('framesExtracted_data_' + str(self.trim_size) + '.npy').is_file():
+                if not Path(str(self.frame_size) + '_framesExtracted_data_' + str(self.trim_size) + '.npy').is_file():
                     print(subDir)
-                    # _ = os.system('rm folder_imuExtracted_data_' + str(self.trim_size) + '.npy')
+                    # _ = os.system('rm framesExtracted_data_' + str(self.trim_size) + '.npy')
                     os.chdir(self.root + subDir)
                     self.capture = cv2.VideoCapture(self.video_file)
                     self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -106,7 +108,7 @@ class BUILDING_DATASETS:
                     self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.trim_size)
                     self.ret, self.last = self.capture.read()
                     self.last = cv2.cvtColor(self.last, cv2.COLOR_BGR2RGB)
-                    self.last = cv2.resize(self.last, (512, 512))
+                    self.last = cv2.resize(self.last, (self.frame_size, self.frame_size))
                     total_frames = 1
                     while self.ret:
                         if total_frames == (self.frame_count - self.trim_size*2):
@@ -114,7 +116,7 @@ class BUILDING_DATASETS:
                         # cv2.imwrite(root + subDir + "frames/frame%d.jpg" % total_frames, frame)
                         self.ret, self.new = self.capture.read()
                         self.new = cv2.cvtColor(self.new, cv2.COLOR_BGR2RGB)
-                        self.new = cv2.resize(self.new, (512, 512))
+                        self.new = cv2.resize(self.new, (self.frame_size, self.frame_size))
                         total_frames += 1
 
 
@@ -122,7 +124,7 @@ class BUILDING_DATASETS:
                         # self.stack_frames.append((torch.cat((self.last, self.new), axis=0)).detach().cpu().numpy())
                         self.last = self.new
 
-                    with open(self.root + subDir + 'framesExtracted_data_' + str(self.trim_size) + '.npy', 'wb') as f:
+                    with open(self.root + subDir + str(self.frame_size) + '_framesExtracted_data_' + str(self.trim_size) + '.npy', 'wb') as f:
                         np.save(f, self.stack_frames)
                         f.close()
 

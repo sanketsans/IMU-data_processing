@@ -22,7 +22,7 @@ class VIS_ENCODER(nn.Module):
         self.net = nn.Sequential(*list(self.net.children())[0:9]).to(self.device)
         # for i in range(len(self.net) - 1):
         #     self.net[i][1] = nn.ReLU()
-        self.fc = nn.Linear(8192*8, 1024).to(self.device)
+        self.fc = nn.Linear(1024*4*4, 1024).to(self.device)
         # self.net[8][1] = nn.ReLU(inplace=False)
         # self.net[9] = self.net[9][0]
 
@@ -31,7 +31,7 @@ class VIS_ENCODER(nn.Module):
 
     def forward(self, input_img):
         out = self.net(input_img)
-        out = out.reshape(-1, 8192*8)
+        out = out.reshape(-1, 1024*4*)
         out = self.fc(out)
 
         return out

@@ -50,7 +50,7 @@ class FusionPipeline(nn.Module):
         self.fused_params = None
 
     def prepare_dataset(self):
-        self.unified_dataset = IMU_GAZE_FRAME_DATASET(self.var.root, self.trim_frame_size)
+        self.unified_dataset = IMU_GAZE_FRAME_DATASET(self.var.root, self.var.frame_size, self.trim_frame_size)
         return self.unified_dataset
 
     def init_stage(self):
@@ -116,7 +116,11 @@ if __name__ == "__main__":
     folders_num = 0
     start_index = 0
     current_loss = 1000.0
-    optimizer = optim.SGD(pipeline.parameters(), lr=0.01, momentum=0.9, weight_decay=0.00001)
+    optimizer = optim.SGD([
+                {'params': pipeline.imuModel.parameters()},
+                {'params': pipeline.temporalModel.parameters()},
+                {'params': pipeline.frameModel.parameters(), 'lr': 1e-3}
+            ], lr=1e-2, momentum=0.9, weight_decay=0.00001)
     loss_fn = nn.SmoothL1Loss()
 
     if Path(pipeline.var.root + model_checkpoint).is_file():
@@ -147,7 +151,7 @@ if __name__ == "__main__":
                 sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
 
                 # sliced_frame_dataset = torch.load('framesExtracted_data_' + str(trim_frame_size) + '.pt')
-                sliced_frame_dataset = np.load('framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
+                sliced_frame_dataset = np.load(str(pipeline.var.frame_size) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
 
                 unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
                 unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
@@ -158,7 +162,7 @@ if __name__ == "__main__":
                     coordinates = pipeline(frame_data, imu_data).to(device)
                     optimizer.zero_grad()
                     loss = loss_fn(coordinates, gaze_data.float())
-                    train_loss += loss().item()
+                    train_loss += loss.item()
                     tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} lowest: {}'.format(
                         loss.item(), optimizer.param_groups[0]['lr'], current_loss))
                     loss.backward()
@@ -191,7 +195,7 @@ if __name__ == "__main__":
                     sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
                     sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
 
-                    sliced_frame_dataset = np.load('framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
+                    sliced_frame_dataset = np.load(str(pipeline.var.frame_size) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
 
                     unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
@@ -221,7 +225,7 @@ if __name__ == "__main__":
                     sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
                     sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
 
-                    sliced_frame_dataset = np.load('framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
+                    sliced_frame_dataset = np.load(str(pipeline.var.frame_size) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
 
                     unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
