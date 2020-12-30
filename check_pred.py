@@ -47,6 +47,15 @@ if __name__ == "__main__":
             # print(sliced_gaze_dataset[0])
             start_index = end_index
 
+        if 'test_' in subDir:
+            print(subDir)
+            subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+            os.chdir(pipeline.var.root + subDir)
+            capture = cv2.VideoCapture('scenevideo.mp4')
+            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+            end_index = start_index + frame_count - trim_frame_size*2
+            start_index = end_index
+
         if 'val_' in subDir:
             print(subDir)
             with torch.no_grad():
@@ -87,7 +96,7 @@ if __name__ == "__main__":
     ret, frame = capture.read()
     # print(frame_count, frame.shape)
     print(len(sliced_gaze_dataset), sliced_gaze_dataset.shape)
-    coordinate = torch.load(pipeline.var.root + '41_predictions.pt', map_location=torch.device('cpu'))
+    coordinate = torch.load(pipeline.var.root + '40_predictions.pt', map_location=torch.device('cpu'))
     coordinate = coordinate.detach().cpu().numpy()
 
     fourcc = cv2.VideoWriter_fourcc(*'MP4V')
