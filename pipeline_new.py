@@ -117,11 +117,7 @@ if __name__ == "__main__":
     folders_num = 0
     start_index = 0
     current_loss = 1000.0
-    optimizer = optim.SGD([
-                {'params': pipeline.imuModel.parameters()},
-                {'params': pipeline.temporalModel.parameters()},
-                {'params': pipeline.frameModel.parameters(), 'lr': 1e-3}
-            ], lr=1e-2, momentum=0.9, weight_decay=0.00001)
+    optimizer = optim.SGD(pipeline.parameters(), lr=1e-2, momentum=0.9, weight_decay=0.00001)
     loss_fn = nn.SmoothL1Loss()
 
     if Path(pipeline.var.root + model_checkpoint).is_file():
@@ -233,7 +229,7 @@ if __name__ == "__main__":
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
                     tqdm_testLoader = tqdm(unified_dataloader)
                     for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_testLoader):
-                        gaze_data = torch.sum(gaze_data, axis=1) / 8.0
+                        gaze_data = torch.sum(gaze_data, axis=1) / 4.0
                         coordinates = pipeline(frame_data, imu_data).to(device)
                         loss = loss_fn(coordinates, gaze_data.float())
                         test_loss += loss.item()

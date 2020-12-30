@@ -1,4 +1,5 @@
 import os, cv2
+from tqdm import tqdm
 import torch, argparse
 from pathlib import Path
 import numpy as np
@@ -46,7 +47,7 @@ if __name__ == "__main__":
             # print(sliced_gaze_dataset[0])
             start_index = end_index
 
-        if 'test_' in subDir:
+        if 'val_' in subDir:
             print(subDir)
             with torch.no_grad():
                 subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
@@ -59,7 +60,7 @@ if __name__ == "__main__":
                 # print(sliced_gaze_dataset[0])
 
                 if not Path(pipeline.var.root + 'predictions.pt').is_file():
-                    sliced_frame_dataset = np.load('framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
+                    sliced_frame_dataset = np.load(str(256) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
                     unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
                     tqdm_valLoader = tqdm(unified_dataloader)
@@ -68,9 +69,9 @@ if __name__ == "__main__":
                         coordinates = pipeline(frame_data, imu_data).to(device)
 
                         if batch_index == 0:
-                            catList = coordinate
+                            catList = coordinates
                         else:
-                            catList = torch.cat((catList, coordinate), axis=0)
+                            catList = torch.cat((catList, coordinates), axis=0)
 
                     torch.save(catList, 'predictions.pt')
 
@@ -86,14 +87,14 @@ if __name__ == "__main__":
     ret, frame = capture.read()
     # print(frame_count, frame.shape)
     print(len(sliced_gaze_dataset), sliced_gaze_dataset.shape)
-    coordinate = torch.load(pipeline.var.root + 'predictions.pt', map_location=torch.device('cpu'))
+    coordinate = torch.load(pipeline.var.root + '41_predictions.pt', map_location=torch.device('cpu'))
     coordinate = coordinate.detach().cpu().numpy()
 
     fourcc = cv2.VideoWriter_fourcc(*'MP4V')
     out = cv2.VideoWriter('output.mp4',fourcc, fps, (frame.shape[1],frame.shape[0]))
-    frame_count = 0
+    # frame_count = 0
     # df_gaze = df_gaze.T
-    for i in range(frame_count - 1):
+    for i in range(frame_count - 2):
         if ret == True:
             cv2.namedWindow('image', cv2.WINDOW_NORMAL)
             # cv2.resizeWindow('image', 512, 512)
