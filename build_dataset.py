@@ -62,11 +62,11 @@ class BUILDING_DATASETS:
                 self.dataset = JSON_LOADER(subDir)
                 self.dataset.POP_GAZE_DATA(self.frame_count)
                 self.gaze_arr = np.array(self.dataset.var.gaze_data).transpose()
-                if not Path('gaze_file.csv').is_file():
-                    # print('new file wil')
-                    # _ = os.system('rm gaze_file.csv')
-                    # _ = os.system('rm imu_file.csv')
-                    self.create_dataframes(subDir, 'gaze')
+                # if not Path('gaze_file.csv').is_file():
+                #     # print('new file wil')
+                _ = os.system('rm gaze_file.csv')
+                # _ = os.system('rm imu_file.csv')
+                self.create_dataframes(subDir, 'gaze')
 
                 if not Path(self.root + 'gazeExtracted_data_' + str(self.trim_size) + '.pt').is_file():
                     print(subDir)
@@ -145,11 +145,11 @@ class BUILDING_DATASETS:
 
                 self.dataset = JSON_LOADER(subDir)
                 self.dataset.POP_IMU_DATA(self.frame_count)
-                if not Path('imu_file.csv').is_file():
-                    # print('new file wil')
-                    # _ = os.system('rm imu_file.csv')
-                    # _ = os.system('rm gaze_file.csv')
-                    self.create_dataframes(subDir, dframe_type='imu')
+                # if not Path('imu_file.csv').is_file():
+                #     # print('new file wil')
+                _ = os.system('rm imu_file.csv')
+                # _ = os.system('rm gaze_file.csv')
+                self.create_dataframes(subDir, dframe_type='imu')
 
                 if  not Path(self.root + 'imuExtracted_data_' + str(self.trim_size) + '.pt').is_file():
                     print(subDir)

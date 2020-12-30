@@ -23,7 +23,7 @@ class IMU_ENCODER(nn.Module):
     def forward(self, x, hidden):
         # hidden = (h0, c0)
         out, hidden = self.lstm(x, hidden)
-        out = self.fc(out[:, -1, :])
+        out = F.relu(self.fc(out[:, -1, :]))
 
         return out.to(self.device), hidden
 

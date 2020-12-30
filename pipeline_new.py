@@ -140,6 +140,7 @@ if __name__ == "__main__":
             train_loss, val_loss, test_loss = 0.0, 0.0, 0.0
             capture, frame_count = None, None
             pipeline.init_stage()
+
             if 'imu_' in subDir:
                 pipeline.train()
                 # folders_num += 1
@@ -147,7 +148,7 @@ if __name__ == "__main__":
                 os.chdir(pipeline.var.root + subDir)
                 capture = cv2.VideoCapture('scenevideo.mp4')
                 frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                end_index = start_index + frame_count - trim_frame_size*2 -1
+                end_index = start_index + frame_count - trim_frame_size*2
                 sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
                 sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
 
@@ -159,7 +160,7 @@ if __name__ == "__main__":
                 tqdm_trainLoader = tqdm(unified_dataloader)
                 for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_trainLoader):
                     # frame_data = frame_data.permute(0, 3, 1, 2)
-                    gaze_data = torch.sum(gaze_data, axis=1) / 8.0
+                    gaze_data = torch.sum(gaze_data, axis=1) / 4.0
                     coordinates = pipeline(frame_data, imu_data).to(device)
                     optimizer.zero_grad()
                     loss = loss_fn(coordinates, gaze_data.float())
@@ -180,7 +181,7 @@ if __name__ == "__main__":
                                 }, pipeline.var.root + model_checkpoint)
                     print('Model saved')
 
-                start_index = end_index + 1
+                start_index = end_index
                 with open(pipeline.var.root + 'train_loss.txt', 'a') as f:
                     f.write(str(train_loss/len(unified_dataloader)) + '\n')
                     f.close()
@@ -192,7 +193,7 @@ if __name__ == "__main__":
                     os.chdir(pipeline.var.root + subDir)
                     capture = cv2.VideoCapture('scenevideo.mp4')
                     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                    end_index = start_index + frame_count - trim_frame_size*2 -1
+                    end_index = start_index + frame_count - trim_frame_size*2
                     sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
                     sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
 
@@ -202,7 +203,7 @@ if __name__ == "__main__":
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
                     tqdm_valLoader = tqdm(unified_dataloader)
                     for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_valLoader):
-                        gaze_data = torch.sum(gaze_data, axis=1) / 8.0
+                        gaze_data = torch.sum(gaze_data, axis=1) / float(gaze_data.shape[1])
                         coordinates = pipeline(frame_data, imu_data).to(device)
                         loss = loss_fn(coordinates, gaze_data.float())
                         val_loss += loss.item()
@@ -213,7 +214,7 @@ if __name__ == "__main__":
                         f.write(str(val_loss/len(unified_dataloader)) + '\n')
                         f.close()
 
-                start_index = end_index + 1
+                start_index = end_index
 
             if 'test_' in subDir:
                 pipeline.eval()
@@ -222,7 +223,7 @@ if __name__ == "__main__":
                     os.chdir(pipeline.var.root + subDir)
                     capture = cv2.VideoCapture('scenevideo.mp4')
                     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                    end_index = start_index + frame_count - trim_frame_size*2 -1
+                    end_index = start_index + frame_count - trim_frame_size*2
                     sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
                     sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
 
@@ -243,7 +244,7 @@ if __name__ == "__main__":
                         f.write(str(test_loss/len(unified_dataloader)) + '\n')
                         f.close()
 
-                start_index = end_index + 1
+                start_index = end_index
 
         if epoch % 5 == 0:
             torch.save({
