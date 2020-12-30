@@ -40,6 +40,7 @@ class FusionPipeline(nn.Module):
         self.temporalModel = IMU_ENCODER(self.temporalSize, self.var.hidden_size, self.var.num_layers, self.var.num_classes*4, self.device)
 
         self.fc1 = nn.Linear(self.var.num_classes*4, 512).to(self.device)
+        self.droput = nn.Dropout(0.3)
         self.fc2 = nn.Linear(512, 2).to(self.device)
         # self.regressor = nn.Sequential(*[self.fc1, self.fc2, self.fc3])
 
@@ -80,8 +81,8 @@ class FusionPipeline(nn.Module):
         self.fused_params = fused_params.unsqueeze(dim = 1)
         newParams = fused_params.reshape(fused_params.shape[0], self.temporalSeq, self.temporalSize)
         tempOut, (h0, c0) = self.temporalModel(newParams.float(), (self.tempModel_h0, self.tempModel_c0))
-        regOut_1 = F.relu(self.fc1(tempOut)).to(self.device)
-        gaze_pred = self.activation(self.fc2(regOut_1)).to(self.device)
+        regOut_1 = F.relu(self.droput(self.fc1(tempOut))).to(self.device)
+        gaze_pred = self.activation(self.droput(self.fc2(regOut_1))).to(self.device)
 
         self.tempModel_h0, self.tempModel_c0 = h0.detach(), c0.detach()
 

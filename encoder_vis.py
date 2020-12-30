@@ -24,15 +24,15 @@ class VIS_ENCODER(nn.Module):
         #     self.net[i][1] = nn.ReLU()
         self.fc = nn.Linear(1024*4*4, 1024).to(self.device)
         # self.net[8][1] = nn.ReLU(inplace=False)
-        # self.net[9] = self.net[9][0]
+        self.net[8] = self.net[8][0]
 
         for params in self.net.parameters():
             params.requires_grad = True
 
     def forward(self, input_img):
         out = self.net(input_img)
-        out = out.reshape(-1, 1024*4*)
-        out = self.fc(out)
+        out = out.reshape(-1, 1024*4*4)
+        out = F.relu(self.fc(out))
 
         return out
 

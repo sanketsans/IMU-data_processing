@@ -31,9 +31,9 @@ class UNIFIED_DATASET(Dataset):
 
 
 class IMU_GAZE_FRAME_DATASET:
-    def __init__(self, root, trim_size, distribution='S'):
+    def __init__(self, root, frame_size, trim_size, distribution='S'):
         self.root = root
-        self.dataset = BUILDING_DATASETS(self.root, trim_size)
+        self.dataset = BUILDING_DATASETS(self.root, frame_size, trim_size)
         self.frame_datasets = None
         self.imu_datasets, self.gaze_datasets = None, None
         if Path(self.root + 'imuExtracted_data_' + str(trim_size) + '.pt').is_file():

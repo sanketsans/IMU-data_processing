@@ -39,14 +39,14 @@ if __name__ == "__main__":
             os.chdir(pipeline.var.root + subDir)
             capture = cv2.VideoCapture('scenevideo.mp4')
             frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-            end_index = start_index + frame_count - trim_frame_size*2 -1
+            end_index = start_index + frame_count - trim_frame_size*2
         if 'test_' in subDir:
             with torch.no_grad():
                 subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
                 os.chdir(pipeline.var.root + subDir)
                 capture = cv2.VideoCapture('scenevideo.mp4')
                 frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                end_index = start_index + frame_count - trim_frame_size*2 -1
+                end_index = start_index + frame_count - trim_frame_size*2
                 sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
                 sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
 
@@ -66,9 +66,9 @@ if __name__ == "__main__":
 
                     torch.save(catList, 'predictions.pt')
 
-        start_index = end_index + 1
+        start_index = end_index 
 
-
+    print(sliced_gaze_dataset[0], sliced_imu_dataset[0])
     video_file = 'scenevideo.mp4'
     capture = cv2.VideoCapture(video_file)
     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -83,6 +83,7 @@ if __name__ == "__main__":
 
     fourcc = cv2.VideoWriter_fourcc(*'MP4V')
     out = cv2.VideoWriter('output.mp4',fourcc, fps, (frame.shape[1],frame.shape[0]))
+    frame_count = 0
     # df_gaze = df_gaze.T
     for i in range(frame_count - 1):
         if ret == True:
