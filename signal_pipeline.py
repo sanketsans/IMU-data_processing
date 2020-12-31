@@ -53,7 +53,7 @@ class IMU_PIPELINE(nn.Module):
         out = F.relu(self.dropout(self.fc1(out[:, -1, :])))
         out = self.activation(self.dropout(self.fc2(out)))
 
-        return out.to(self.device)
+        return out
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -90,7 +90,6 @@ if __name__ == "__main__":
             capture, frame_count = None, None
 
             if 'imu_' in subDir:
-                print(subDir)
                 pipeline.train()
                 # folders_num += 1
                 subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
@@ -142,6 +141,7 @@ if __name__ == "__main__":
                     capture = cv2.VideoCapture('scenevideo.mp4')
                     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
                     end_index = start_index + frame_count - trim_frame_size*2
+                    sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
                     sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
 
                     unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
@@ -169,6 +169,7 @@ if __name__ == "__main__":
                     capture = cv2.VideoCapture('scenevideo.mp4')
                     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
                     end_index = start_index + frame_count - trim_frame_size*2
+                    sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
                     sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
 
                     unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
