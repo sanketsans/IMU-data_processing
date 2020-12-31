@@ -45,12 +45,11 @@ class VISION_PIPELINE(nn.Module):
         return self.unified_dataset
 
     def forward(self, input_img):
-        print(input_img.shape)
         out = self.net(input_img)
         out = out.reshape(-1, 1024*4*4)
         out = F.relu(self.dropout(self.fc1(out)))
         out = F.relu(self.dropout(self.fc2(out)))
-        out = self.activation(self.droput(self.fc3(out)))
+        out = self.activation(self.dropout(self.fc3(out)))
 
         return out
 

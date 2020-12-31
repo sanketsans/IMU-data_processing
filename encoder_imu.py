@@ -19,13 +19,16 @@ class IMU_ENCODER(nn.Module):
         self.num_layers = num_layers
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, dropout=0.2, bidirectional=True).to(self.device)
         self.fc = nn.Linear(hidden_size*2, num_classes).to(self.device)
+        self.dropout = nn.Dropout(0.2)
 
-    def forward(self, x, hidden):
+    def forward(self, x):
+        h0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+        c0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
         # hidden = (h0, c0)
-        out, hidden = self.lstm(x, hidden)
-        out = F.relu(self.fc(out[:, -1, :]))
+        out, _ = self.lstm(x, (h0, c0))
+        out = F.relu(self.dropout(self.fc(out[:, -1, :])))
 
-        return out, hidden
+        return out
 
 ## PREPARING THE DATA
 # folder = sys.argv[1]

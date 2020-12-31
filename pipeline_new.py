@@ -25,8 +25,8 @@ class FusionPipeline(nn.Module):
         self.var = RootVariables()
         self.checkpoint_path = self.var.root + checkpoint
         self.activation = nn.Sigmoid()
-        self.temporalSeq = 64
-        self.temporalSize = 20
+        self.temporalSeq = 80
+        self.temporalSize = 16
         self.trim_frame_size = trim_frame_size
 
         ## IMU Models
@@ -64,9 +64,9 @@ class FusionPipeline(nn.Module):
         self.tempModel_c0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
 
     def get_encoder_params(self, imu_BatchData, frame_BatchData):
-        self.imu_encoder_params, (h0, c0) = self.imuModel(imu_BatchData.float(), (self.imuModel_h0, self.imuModel_c0)).to(self.device)
+        self.imu_encoder_params = self.imuModel(imu_BatchData.float()).to(self.device)
         self.frame_encoder_params = self.frameModel(frame_BatchData.float()).to(self.device)
-        self.imuModel_h0, self.imuModel_c0 = h0.detach(), c0.detach()
+        #self.imuModel_h0, self.imuModel_c0 = h0.detach(), c0.detach()
 
         return self.imu_encoder_params, self.frame_encoder_params
 
@@ -80,11 +80,11 @@ class FusionPipeline(nn.Module):
     def temporal_modelling(self, fused_params):
         self.fused_params = fused_params.unsqueeze(dim = 1)
         newParams = fused_params.reshape(fused_params.shape[0], self.temporalSeq, self.temporalSize)
-        tempOut, (h0, c0) = self.temporalModel(newParams.float(), (self.tempModel_h0, self.tempModel_c0))
+        tempOut = self.temporalModel(newParams.float()).to(self.device)
         regOut_1 = F.relu(self.fc1(tempOut)).to(self.device)
         gaze_pred = self.activation(self.droput(self.fc2(regOut_1))).to(self.device)
 
-        self.tempModel_h0, self.tempModel_c0 = h0.detach(), c0.detach()
+        #self.tempModel_h0, self.tempModel_c0 = h0.detach(), c0.detach()
 
         return gaze_pred
 
@@ -135,7 +135,7 @@ if __name__ == "__main__":
             sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset = None, None, None
             train_loss, val_loss, test_loss = 0.0, 0.0, 0.0
             capture, frame_count = None, None
-            pipeline.init_stage()
+            #pipeline.init_stage()
 
             if 'imu_' in subDir:
                 pipeline.train()

@@ -23,8 +23,6 @@ if __name__ == "__main__":
     if Path(pipeline.var.root + model_checkpoint).is_file():
         checkpoint = torch.load(pipeline.var.root + model_checkpoint)
         pipeline.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        current_loss = checkpoint['loss']
         print('Model loaded')
 
     uni_dataset = pipeline.prepare_dataset()
@@ -36,7 +34,6 @@ if __name__ == "__main__":
     sliced_imu_dataset, sliced_gaze_dataset, sliced_frame_dataset = None, None, None
     catList = None
     for index, subDir in enumerate(sorted(os.listdir(pipeline.var.root))):
-        pipeline.init_stage()
         if 'imu_' in subDir:
             print(subDir)
             subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
@@ -93,13 +90,14 @@ if __name__ == "__main__":
     print(frame_count, fps)
     capture.set(cv2.CAP_PROP_POS_FRAMES,trim_frame_size)
     ret, frame = capture.read()
-    # coordinate = torch.load(pipeline.var.root + '42_predictions.pt', map_location=torch.device('cpu'))
-    # coordinate = coordinate.detach().cpu().numpy()
-    # print(len(coordinate), len(sliced_gaze_dataset))
+    subDir = 'val_SuperMarket_S1/'
+    coordinate = torch.load(pipeline.var.root + 'signal_' + subDir[:-1] + '_predictions.pt', map_location=torch.device('cpu'))
+    coordinate = coordinate.detach().cpu().numpy()
+    print(len(coordinate), len(sliced_gaze_dataset))
     #
     # fourcc = cv2.VideoWriter_fourcc(*'MP4V')
-    out = cv2.VideoWriter('output.mp4',fourcc, fps, (frame.shape[1],frame.shape[0]))
-    frame_count = 0
+    out = cv2.VideoWriter('vision_output.mp4',fourcc, fps, (frame.shape[1],frame.shape[0]))
+    # frame_count = 0
     # df_gaze = df_gaze.T
     for i in range(frame_count - 2):
         if ret == True:
