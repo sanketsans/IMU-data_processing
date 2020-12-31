@@ -24,7 +24,7 @@ class IMU_DATASET(Dataset):
         return len(self.imu_data) - 1
 
     def __getitem__(self, index):
-        return torch.from_numpy(np.concatenate((self.imu_data[index], self.imu_data[index+1]), axis=0)).to(self.device), torch.from_numpy(self.gaze_data[index]).to(self.device)
+        return torch.from_numpy(self.imu_data[index]).to(self.device), torch.from_numpy(self.gaze_data[index]).to(self.device)
 
 
 class IMU_PIPELINE(nn.Module):
@@ -144,14 +144,12 @@ if __name__ == "__main__":
                     end_index = start_index + frame_count - trim_frame_size*2
                     sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
 
-                    sliced_frame_dataset = np.load(str(pipeline.var.frame_size) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
-
-                    unified_dataset = VISION_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
+                    unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
                     tqdm_valLoader = tqdm(unified_dataloader)
-                    for batch_index, (frame_data, gaze_data) in enumerate(tqdm_valLoader):
+                    for batch_index, (imu_data, gaze_data) in enumerate(tqdm_valLoader):
                         gaze_data = torch.sum(gaze_data, axis=1) / float(gaze_data.shape[1])
-                        coordinates = pipeline(frame_data).to(device)
+                        coordinates = pipeline(imu_data.float()).to(device)
                         loss = loss_fn(coordinates, gaze_data.float())
                         val_loss += loss.item()
                         tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
@@ -173,14 +171,12 @@ if __name__ == "__main__":
                     end_index = start_index + frame_count - trim_frame_size*2
                     sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
 
-                    sliced_frame_dataset = np.load(str(pipeline.var.frame_size) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
-
-                    unified_dataset = VISION_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
+                    unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
                     tqdm_testLoader = tqdm(unified_dataloader)
-                    for batch_index, (frame_data, gaze_data) in enumerate(tqdm_testLoader):
+                    for batch_index, (imu_data, gaze_data) in enumerate(tqdm_testLoader):
                         gaze_data = torch.sum(gaze_data, axis=1) / 4.0
-                        coordinates = pipeline(frame_data).to(device)
+                        coordinates = pipeline(imu_data.float()).to(device)
                         loss = loss_fn(coordinates, gaze_data.float())
                         test_loss += loss.item()
                         tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
