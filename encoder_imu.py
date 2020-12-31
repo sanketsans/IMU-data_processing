@@ -25,7 +25,7 @@ class IMU_ENCODER(nn.Module):
         out, hidden = self.lstm(x, hidden)
         out = F.relu(self.fc(out[:, -1, :]))
 
-        return out.to(self.device), hidden
+        return out, hidden
 
 ## PREPARING THE DATA
 # folder = sys.argv[1]

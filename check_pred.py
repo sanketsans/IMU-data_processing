@@ -68,7 +68,7 @@ if __name__ == "__main__":
                 sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
                 # print(sliced_gaze_dataset[0])
 
-                if not Path(pipeline.var.root + 'predictions.pt').is_file():
+                if not Path(pipeline.var.root + str(42) + '_predictions.pt').is_file():
                     sliced_frame_dataset = np.load(str(256) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
                     unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
@@ -82,7 +82,7 @@ if __name__ == "__main__":
                         else:
                             catList = torch.cat((catList, coordinates), axis=0)
 
-                    torch.save(catList, 'predictions.pt')
+                    torch.save(catList, str(index) + '_predictions.pt')
 
             start_index = end_index
 
@@ -96,8 +96,9 @@ if __name__ == "__main__":
     ret, frame = capture.read()
     # print(frame_count, frame.shape)
     print(len(sliced_gaze_dataset), sliced_gaze_dataset.shape)
-    coordinate = torch.load(pipeline.var.root + '40_predictions.pt', map_location=torch.device('cpu'))
+    coordinate = torch.load(pipeline.var.root + '42_predictions.pt', map_location=torch.device('cpu'))
     coordinate = coordinate.detach().cpu().numpy()
+    print(len(coordinate), len(sliced_gaze_dataset))
 
     fourcc = cv2.VideoWriter_fourcc(*'MP4V')
     out = cv2.VideoWriter('output.mp4',fourcc, fps, (frame.shape[1],frame.shape[0]))
@@ -105,7 +106,7 @@ if __name__ == "__main__":
     # df_gaze = df_gaze.T
     for i in range(frame_count - 2):
         if ret == True:
-            cv2.namedWindow('image', cv2.WINDOW_NORMAL)
+            # cv2.namedWindow('image', cv2.WINDOW_NORMAL)
             # cv2.resizeWindow('image', 512, 512)
             # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             # coordinate = sliced_gaze_dataset[i]
