@@ -26,6 +26,10 @@ class JSON_LOADER:
             for jsonObj in f:
                 self.var.imu_dataList.append(json.loads(jsonObj))
 
+        self.imu_start_timestamp = float(self.var.imu_dataList[0]['timestamp'])
+        self.gaze_start_timestamp = float(self.var.gaze_dataList[0]['timestamp'])
+        self.start_timestamp = (self.imu_start_timestamp if self.gaze_start_timestamp < self.imu_start_timestamp else self.gaze_start_timestamp) - 0.01
+
 
     def POP_GAZE_DATA(self, frame_count, return_val=False):
         ### GAZE DATA
@@ -33,7 +37,7 @@ class JSON_LOADER:
 
         for data in self.var.gaze_dataList:
             try:
-                if(float(data['timestamp']) > 0.000000000 and float(data['timestamp']) < 600.0):
+                if(float(data['timestamp']) > self.start_timestamp and float(data['timestamp']) < 600.0):
                     nT = self.utils.floor(data['timestamp'])
                     # diff = round(nT - oT, 2)
                     if (0.0 <= float(data['data']['gaze2d'][0]) <= 1.0) and (0.0 <= float(data['data']['gaze2d'][1]) <= 1.0):
@@ -65,7 +69,7 @@ class JSON_LOADER:
 
         for index, data in enumerate(self.var.imu_dataList):
             try:
-                if(float(data['timestamp']) > 0.00000 and float(data['timestamp']) < 600.00):
+                if(float(data['timestamp']) > self.start_timestamp and float(data['timestamp']) < 600.00):
                     nT = self.utils.floor(data['timestamp'])
                     diff = round((nT - oT), 2)
                     # print(nT)
@@ -121,15 +125,12 @@ if __name__ == "__main__":
     folder = sys.argv[1]
     dataset_folder = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
     # os.chdir(dataset_folder)
-    os.chdir(dataset_folder + folder + '/' if folder[-1]!='/' else (dataset_folder + folder))
-    dataset = BUILDING_DATASET()
-    if Path('gaze_file.csv').is_file():
-        print('File exists')
-    else:
-
-        print(dataset.POP_GAZE_DATA())
-        print(dataset.POP_IMU_DATA())
-        print('IMU samples: {}, Gaze samples: {}'.format(dataset.var.n_imu_samples, dataset.var.n_gaze_samples))
+    for index, folder in enumerate(sorted(os.listdir(dataset_folder))):
+        if 'imu_' in folder or 'val_' in folder or 'test_' in folder:
+            folder = folder + '/' if folder[-1]!='/' else folder
+            os.chdir(dataset_folder + folder)
+            dataset = JSON_LOADER(folder)
+            print(folder, dataset.gaze_start_timestamp, dataset.imu_start_timestamp, dataset.start_timestamp)
     # fig = plt.figure()
 
 # print(utils.get_sample_rate(var.timestamps_imu), len(var.timestamps_imu))
