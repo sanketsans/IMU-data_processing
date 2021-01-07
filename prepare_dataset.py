@@ -12,6 +12,7 @@ sys.path.append('../')
 from variables import Variables, RootVariables
 from build_dataset import BUILDING_DATASETS
 from torchvision import transforms
+from helpers import Helpers
 
 ## save the extracted dataset in each folder.
 class UNIFIED_DATASET(Dataset):
@@ -49,15 +50,14 @@ class IMU_GAZE_FRAME_DATASET:
             torch.save(self.imu_datasets, self.root + 'imuExtracted_data_' + str(trim_size) + '.pt')
             torch.save(self.gaze_datasets, self.root + 'gazeExtracted_data_' + str(trim_size) + '.pt')
 
-        self.frame_datasets = self.dataset.load_unified_frame_dataset()
+        # self.frame_datasets = self.dataset.load_unified_frame_dataset()
 
         if distribution == 'N':
             self.imu_datasets = self.dataset.normalization(self.imu_datasets)
         else:
             self.imu_datasets = self.dataset.standarization(self.imu_datasets)
 
-        #
-        # self.imu_datasets = self.dataset.normalization(self.imu_datasets)
+        self.imu_datasets = self.dataset.normalization(self.imu_datasets)
         # self.gaze_datasets = self.dataset.standarization(self.gaze_datasets)
 
         self.gaze_datasets = self.gaze_datasets.reshape(-1, 4, self.gaze_datasets.shape[-1])
@@ -72,12 +72,28 @@ class IMU_GAZE_FRAME_DATASET:
 if __name__ =="__main__":
     var = RootVariables()
     device = torch.device("cpu")
-    datasets = IMU_GAZE_FRAME_DATASET(var.root, 150, device)
-    s = 0
-    e = 1200
-    imu = datasets.get_imu_gaze_datas()
-    imudata = imu[:100]
-    data = torch.utils.data.DataLoader(imudata, batch_size=5)
-    a = iter(data)
-    x = next(a)
-    print(len(data), a)
+    trim_size = 150
+    datasets = IMU_GAZE_FRAME_DATASET(var.root, 150, trim_size)
+    uni_imu_dataset = datasets.imu_datasets
+    uni_gaze_dataset = datasets.gaze_datasets
+    folders_num, start_index = 0, 0
+    utls = Helpers()
+    for index, subDir in enumerate(sorted(os.listdir(var.root))):
+        if 'imu_' in subDir:
+            folders_num += 1
+            print(subDir)
+            subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+            os.chdir(var.root + subDir)
+            capture = cv2.VideoCapture('scenevideo.mp4')
+            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+            end_index = start_index + frame_count - trim_size*2
+            sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
+            sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
+
+            print(len(sliced_imu_dataset), len(sliced_gaze_dataset))
+            print(sliced_imu_dataset[:,0][:,0].shape, )
+            print(utls.get_sample_rate(sliced_imu_dataset[:,0][:,0]))
+            break
+
+        if folders_num >0 :
+            break

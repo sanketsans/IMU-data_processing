@@ -22,13 +22,28 @@ class IMU_ENCODER(nn.Module):
         self.dropout = nn.Dropout(0.2)
 
     def forward(self, x):
-        h0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
-        c0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+        h0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+        c0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
         # hidden = (h0, c0)
         out, _ = self.lstm(x, (h0, c0))
         out = F.relu(self.dropout(self.fc(out[:, -1, :])))
 
         return out
+
+class TEMP_ENCODER(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, device):
+        super(TEMP_ENCODER, self).__init__()
+        torch.manual_seed(0)
+        self.device = device
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, dropout=0.2, bidirectional=True).to(self.device)
+
+    def forward(self, x, hidden):
+        out, hidden = self.lstm(x, hidden)
+
+        return out.to(self.device), hidden
 
 ## PREPARING THE DATA
 # folder = sys.argv[1]

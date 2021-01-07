@@ -62,17 +62,12 @@ class BUILDING_DATASETS:
                 self.dataset = JSON_LOADER(subDir)
                 self.dataset.POP_GAZE_DATA(self.frame_count)
                 self.gaze_arr = np.array(self.dataset.var.gaze_data).transpose()
-                # if not Path('gaze_file.csv').is_file():
-                #     # print('new file wil')
                 _ = os.system('rm gaze_file.csv')
-                # _ = os.system('rm imu_file.csv')
                 self.create_dataframes(subDir, 'gaze')
 
                 if not Path(self.root + 'gazeExtracted_data_' + str(self.trim_size) + '.pt').is_file():
                     print(subDir)
-                    # _ = os.system('rm folder_gazeExtracted_data_' + str(self.trim_size) + '.pt')
                     self.gaze_arr = np.array(self.dataset.var.gaze_data).transpose()
-                    # print(gaze_arr)
                     self.temp = np.zeros((self.frame_count*4-self.trim_size*4*2, 2))
                     self.temp[:,0] = self.gaze_arr[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [0]])]
                     self.temp[:,1] = self.gaze_arr[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [1]])]
@@ -83,7 +78,6 @@ class BUILDING_DATASETS:
                     else:
                         self.new = self.temp
                     self.last = self.new
-                    # torch.save(torch.from_numpy(self.temp), 'folder_gazeExtracted_data_' + str(self.trim_size) + '.pt')
 
         return self.new
 
@@ -113,7 +107,6 @@ class BUILDING_DATASETS:
                     while self.ret:
                         if total_frames == (self.frame_count - self.trim_size*2):
                             break
-                        # cv2.imwrite(root + subDir + "frames/frame%d.jpg" % total_frames, frame)
                         self.ret, self.new = self.capture.read()
                         self.new = cv2.cvtColor(self.new, cv2.COLOR_BGR2RGB)
                         self.new = cv2.resize(self.new, (self.frame_size, self.frame_size))
@@ -121,7 +114,6 @@ class BUILDING_DATASETS:
 
 
                         self.stack_frames.append(np.concatenate((self.last, self.new), axis=2))
-                        # self.stack_frames.append((torch.cat((self.last, self.new), axis=0)).detach().cpu().numpy())
                         self.last = self.new
 
                     with open(self.root + subDir + str(self.frame_size) + '_framesExtracted_data_' + str(self.trim_size) + '.npy', 'wb') as f:
@@ -145,10 +137,7 @@ class BUILDING_DATASETS:
 
                 self.dataset = JSON_LOADER(subDir)
                 self.dataset.POP_IMU_DATA(self.frame_count)
-                # if not Path('imu_file.csv').is_file():
-                #     # print('new file wil')
                 _ = os.system('rm imu_file.csv')
-                # _ = os.system('rm gaze_file.csv')
                 self.create_dataframes(subDir, dframe_type='imu')
 
                 if  not Path(self.root + 'imuExtracted_data_' + str(self.trim_size) + '.pt').is_file():
@@ -156,7 +145,6 @@ class BUILDING_DATASETS:
                     # _ = os.system('rm folder_imuExtracted_data_' + str(self.trim_size) + '.pt')
                     self.imu_arr_acc = np.array(self.dataset.var.imu_data_acc).transpose()
                     self.imu_arr_gyro = np.array(self.dataset.var.imu_data_gyro).transpose()
-                    # print(gaze_arr)
                     self.temp = np.zeros((self.frame_count*4-self.trim_size*4*2, 6))
                     self.temp[:,0] = self.imu_arr_acc[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [0]])]
                     self.temp[:,1] = self.imu_arr_acc[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [1]])]
@@ -172,9 +160,6 @@ class BUILDING_DATASETS:
                         self.new = self.temp
 
                     self.last = self.new
-                    # sum += self.frame_count - self.trim_size*2
-                    # print(self.frame_count, sum, self.temp.shape)
-                    # torch.save(torch.from_numpy(self.temp), 'folder_imuExtracted_data_' + str(self.trim_size) + '.pt')
 
         return self.new
 
@@ -188,7 +173,6 @@ class BUILDING_DATASETS:
             self.df_gaze = pd.DataFrame({ key:pd.Series(value) for key, value in self.panda_data.items()}).T
             self.df_gaze.columns =['Gaze_Pt_1', 'Gaze_Pt_2', 'Gaze_Pt_3', 'Gaze_Pt_4']
             self.df_gaze.to_csv('gaze_file.csv')
-            # self.df_gaze = pd.read_csv('gaze_file.csv')
         else:
             ## IMU
             for sec in range(self.frame_count):
@@ -204,8 +188,6 @@ class BUILDING_DATASETS:
             self.df_imu = pd.DataFrame({ key:pd.Series(value) for key, value in self.panda_data.items()}).T
             self.df_imu.columns =['IMU_Acc/Gyro_Pt_1', 'IMU_Acc/Gyro_Pt_2', 'IMU_Acc/Gyro_Pt_3', 'IMU_Acc/Gyro_Pt_4']
             self.df_imu.to_csv('imu_file.csv')
-            # self.df_imu = pd.read_csv('imu_file.csv')
-
 
 if __name__ == "__main__":
     var = RootVariables()

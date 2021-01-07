@@ -56,12 +56,12 @@ class FusionPipeline(nn.Module):
 
     def init_stage(self):
         # IMU Model
-        self.imuModel_h0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
-        self.imuModel_c0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+        self.imuModel_h0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+        self.imuModel_c0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
 
         # Temp Model
-        self.tempModel_h0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
-        self.tempModel_c0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+        self.tempModel_h0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+        self.tempModel_c0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
 
     def get_encoder_params(self, imu_BatchData, frame_BatchData):
         self.imu_encoder_params = self.imuModel(imu_BatchData.float()).to(self.device)
@@ -89,7 +89,6 @@ class FusionPipeline(nn.Module):
         return gaze_pred
 
     def forward(self, batch_frame_data, batch_imu_data):
-        # frame_imu_trainLoader = self.get_dataset_dataloader(folder)
         imu_params, frame_params = self.get_encoder_params(batch_imu_data, batch_frame_data)
         fused = self.get_fusion_params(imu_params, frame_params)
         coordinate = self.temporal_modelling(fused)
@@ -117,7 +116,12 @@ if __name__ == "__main__":
     folders_num = 0
     start_index = 0
     current_loss = 1000.0
-    optimizer = optim.SGD(pipeline.parameters(), lr=1e-2, momentum=0.9, weight_decay=0.00001)
+    # optimizer = optim.Adam([
+    #                         {'params': imuModel.parameters(), 'lr': 1e-4},
+    #                         {'params': frameModel.parameters(), 'lr': 1e-4},
+    #                         {'params': temporalModel.parameters(), 'lr': 1e-4}
+    #                         ], lr=1e-3)
+    optimizer = optim.Adam(pipeline.parameters(), lr=1e-4)
     loss_fn = nn.SmoothL1Loss()
 
     if Path(pipeline.var.root + model_checkpoint).is_file():
@@ -162,7 +166,7 @@ if __name__ == "__main__":
                     loss = loss_fn(coordinates, gaze_data.float())
                     train_loss += loss.item()
                     tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} lowest: {}'.format(
-                        loss.item(), optimizer.param_groups[0]['lr'], current_loss))
+                        train_loss/(batch_index+1), optimizer.param_groups[0]['lr'], current_loss))
                     loss.backward()
                     optimizer.step()
                     # break
@@ -204,7 +208,7 @@ if __name__ == "__main__":
                         loss = loss_fn(coordinates, gaze_data.float())
                         val_loss += loss.item()
                         tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                            loss.item(), optimizer.param_groups[0]['lr']))
+                            val_loss/(batch_index+1), optimizer.param_groups[0]['lr']))
 
                     with open(pipeline.var.root + 'validation_loss.txt', 'a') as f:
                         f.write(str(val_loss/len(unified_dataloader)) + '\n')
@@ -234,7 +238,7 @@ if __name__ == "__main__":
                         loss = loss_fn(coordinates, gaze_data.float())
                         test_loss += loss.item()
                         tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                            loss.item(), optimizer.param_groups[0]['lr']))
+                            test_loss/(batch_index+1), optimizer.param_groups[0]['lr']))
 
                     with open(pipeline.var.root + 'testing_loss.txt', 'a') as f:
                         f.write(str(test_loss/len(unified_dataloader)) + '\n')

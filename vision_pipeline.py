@@ -86,7 +86,7 @@ if __name__ == "__main__":
     uni_dataset = pipeline.prepare_dataset()
     # uni_imu_dataset = uni_dataset.imu_datasets      ## will already be standarized
     uni_gaze_dataset = uni_dataset.gaze_datasets
-    optimizer = optim.Adam(pipeline.parameters(), lr=0.001)
+    optimizer = optim.Adam(pipeline.parameters(), lr=0.0001)
     loss_fn = nn.SmoothL1Loss()
 
     if Path(pipeline.var.root + model_checkpoint).is_file():
@@ -126,7 +126,7 @@ if __name__ == "__main__":
                     loss = loss_fn(coordinates, gaze_data.float())
                     train_loss += loss.item()
                     tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} lowest: {}'.format(
-                        loss.item(), optimizer.param_groups[0]['lr'], current_loss))
+                        train_loss/(batch_index+1), optimizer.param_groups[0]['lr'], current_loss))
 
                     optimizer.zero_grad()
                     loss.backward()
@@ -168,7 +168,7 @@ if __name__ == "__main__":
                         loss = loss_fn(coordinates, gaze_data.float())
                         val_loss += loss.item()
                         tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                            loss.item(), optimizer.param_groups[0]['lr']))
+                            val_loss/(batch_index+1), optimizer.param_groups[0]['lr']))
 
                     with open(pipeline.var.root + 'vision_validation_loss.txt', 'a') as f:
                         f.write(str(val_loss/len(unified_dataloader)) + '\n')
@@ -197,7 +197,7 @@ if __name__ == "__main__":
                         loss = loss_fn(coordinates, gaze_data.float())
                         test_loss += loss.item()
                         tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                            loss.item(), optimizer.param_groups[0]['lr']))
+                            test_loss/(batch_index+1), optimizer.param_groups[0]['lr']))
 
                     with open(pipeline.var.root + 'vision_testing_loss.txt', 'a') as f:
                         f.write(str(test_loss/len(unified_dataloader)) + '\n')

@@ -12,6 +12,7 @@ if __name__ == "__main__":
     parser.add_argument('--fp16', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
     parser.add_argument("--rgb_max", type=float, default=255.)
     args = parser.parse_args()
+    trim_frame_size = 150
     model_checkpoint = 'pipeline_checkpoint.pth'
     flownet_checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
     pipeline = FusionPipeline(args, flownet_checkpoint, trim_frame_size, device)
@@ -66,7 +67,7 @@ if __name__ == "__main__":
                 sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
                 # print(sliced_gaze_dataset[0])
 
-                if not Path(pipeline.var.root + str(42) + '_predictions.pt').is_file():
+                if not Path(pipeline.var.root + str(46) + '_predictions.pt').is_file():
                     sliced_frame_dataset = np.load(str(256) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
                     unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
@@ -94,7 +95,7 @@ if __name__ == "__main__":
     ret, frame = capture.read()
     # print(frame_count, frame.shape)
     print(len(sliced_gaze_dataset), sliced_gaze_dataset.shape)
-    coordinate = torch.load(pipeline.var.root + '42_predictions.pt', map_location=torch.device('cpu'))
+    coordinate = torch.load(pipeline.var.root + '46_predictions.pt', map_location=torch.device('cpu'))
     coordinate = coordinate.detach().cpu().numpy()
     print(len(coordinate), len(sliced_gaze_dataset))
 
@@ -104,8 +105,8 @@ if __name__ == "__main__":
     # df_gaze = df_gaze.T
     for i in range(frame_count - 2):
         if ret == True:
-            # cv2.namedWindow('image', cv2.WINDOW_NORMAL)
-            # cv2.resizeWindow('image', 512, 512)
+            cv2.namedWindow('image', cv2.WINDOW_NORMAL)
+            cv2.resizeWindow('image', 512, 512)
             # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             # coordinate = sliced_gaze_dataset[i]
             gt_gaze_pts = np.sum(sliced_gaze_dataset[i], axis=0) / 4.0
@@ -118,7 +119,7 @@ if __name__ == "__main__":
             #         print(e)
             frame = cv2.circle(frame, (int(gt_gaze_pts[0]*frame.shape[1]),int(gt_gaze_pts[1]*frame.shape[0])), radius=5, color=(0, 0, 255), thickness=5)
             frame = cv2.circle(frame, (int(pred_gaze_pts[0]*frame.shape[1]),int(pred_gaze_pts[1]*frame.shape[0])), radius=5, color=(0, 255, 0), thickness=5)
-            # cv2.imshow('image', frame)
+            cv2.imshow('image', frame)
             out.write(frame)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):

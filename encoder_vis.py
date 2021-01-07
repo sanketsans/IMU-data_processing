@@ -20,12 +20,11 @@ class VIS_ENCODER(nn.Module):
         dict = torch.load(checkpoint_path)
         self.net.load_state_dict(dict["state_dict"])
         self.net = nn.Sequential(*list(self.net.children())[0:9]).to(self.device)
-        # for i in range(len(self.net) - 1):
-        #     self.net[i][1] = nn.ReLU()
+        for i in range(len(self.net) - 1):
+            self.net[i][1] = nn.ReLU()
         self.fc1 = nn.Linear(1024*4*4, 4096).to(self.device)
         self.fc2 = nn.Linear(4096, 1024).to(self.device)
         self.dropout = nn.Dropout(0.2)
-        # self.net[8][1] = nn.ReLU(inplace=False)
         self.net[8] = self.net[8][0]
 
         for params in self.net.parameters():
