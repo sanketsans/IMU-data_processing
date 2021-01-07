@@ -33,8 +33,8 @@ class VIS_ENCODER(nn.Module):
     def forward(self, input_img):
         out = self.net(input_img)
         out = out.reshape(-1, 1024*4*4)
-        out = F.relu(self.droput(self.fc1(out)))
-        out = F.relu(self.fc2(out))
+        # out = F.relu(self.droput(self.fc1(out)))
+        # out = F.relu(self.fc2(out))
 
         return out
 

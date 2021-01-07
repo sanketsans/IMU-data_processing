@@ -22,13 +22,13 @@ class IMU_ENCODER(nn.Module):
         self.dropout = nn.Dropout(0.2)
 
     def forward(self, x):
-        h0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
-        c0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+        h0 = torch.randn(self.num_layers*2, x.size(0), self.hidden_size).to(self.device)
+        c0 = torch.randn(self.num_layers*2, x.size(0), self.hidden_size).to(self.device)
         # hidden = (h0, c0)
         out, _ = self.lstm(x, (h0, c0))
-        out = F.relu(self.dropout(self.fc(out[:, -1, :])))
+        #out = F.relu(self.dropout(self.fc(out[:, -1, :])))
 
-        return out
+        return out[:,-1,:]
 
 class TEMP_ENCODER(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, device):

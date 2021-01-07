@@ -39,7 +39,7 @@ class FusionPipeline(nn.Module):
         ## TEMPORAL MODELS
         self.temporalModel = IMU_ENCODER(self.temporalSize, self.var.hidden_size, self.var.num_layers, self.var.num_classes*4, self.device)
 
-        self.fc1 = nn.Linear(self.var.num_classes*4, 512).to(self.device)
+        self.fc1 = nn.Linear(self.var.hidden_size*2, 512).to(self.device)
         self.droput = nn.Dropout(0.3)
         self.fc2 = nn.Linear(512, 2).to(self.device)
         # self.regressor = nn.Sequential(*[self.fc1, self.fc2, self.fc3])
