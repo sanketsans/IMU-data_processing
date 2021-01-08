@@ -7,6 +7,7 @@ class Helpers:
     def floor(self, value):
         return math.floor(value*100)/100.0
 
+
     def get_sample_rate(self, samples):
         total_sample = 0.0
         not_consistent = 0

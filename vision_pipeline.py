@@ -63,7 +63,16 @@ class VISION_DATASET(Dataset):
     def __len__(self):
         return len(self.gaze_data) -1
 
+    def get_num_correct(self, pred, label):
+        return (np.abs(pred - label) < 0.04).all(axis=1).mean()
+
     def __getitem__(self, index):
+        while True:
+            check = np.isnan(self.gaze_data[index])
+            if check.any():
+                index += 1
+            else:
+                break
         return self.transforms(self.frame_data[index]).to(self.device), torch.from_numpy(self.gaze_data[index]).to(self.device)
 
 
@@ -121,14 +130,14 @@ if __name__ == "__main__":
                 unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
                 tqdm_trainLoader = tqdm(unified_dataloader)
                 for batch_index, (frame_data, gaze_data) in enumerate(tqdm_trainLoader):
-                    gaze_data = torch.sum(gaze_data, axis=1) / 4.0
-                    coordinates = pipeline(frame_data).to(device)
+                    gaze_data = torch.round((torch.sum(gaze_data, axis=1) / 4.0) * 100) / 100.0
+                    optimizer.zero_grad()
+                    coordinates = torch.round(pipeline(frame_data).to(device) * 100) / 100.0
                     loss = loss_fn(coordinates, gaze_data.float())
                     train_loss += loss.item()
                     tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} lowest: {}'.format(
                         train_loss/(batch_index+1), optimizer.param_groups[0]['lr'], current_loss))
 
-                    optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
 

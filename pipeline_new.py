@@ -25,7 +25,7 @@ class FusionPipeline(nn.Module):
         self.var = RootVariables()
         self.checkpoint_path = self.var.root + checkpoint
         self.activation = nn.Sigmoid()
-        self.temporalSeq = 80
+        self.temporalSeq = 256
         self.temporalSize = 16
         self.trim_frame_size = trim_frame_size
 
@@ -42,6 +42,9 @@ class FusionPipeline(nn.Module):
         self.fc1 = nn.Linear(self.var.hidden_size*2, 512).to(self.device)
         self.droput = nn.Dropout(0.3)
         self.fc2 = nn.Linear(512, 2).to(self.device)
+        self.imuMask = nn.Linear(self.var.hidden_size*2, self.var.hidden_size*2)
+        self.frameMask = nn.Linear(1024*4*4, 1024*4*4)
+        self.fusion = nn.Linear(1024*4*4 + self.var.hidden_size*2, 4096)
         # self.regressor = nn.Sequential(*[self.fc1, self.fc2, self.fc3])
 
         ##OTHER
@@ -70,11 +73,20 @@ class FusionPipeline(nn.Module):
 
         return self.imu_encoder_params, self.frame_encoder_params
 
+    def fusion_network(self, imu_params, frame_params):
+        imuMask = self.activation(self.imuMask(imu_params)).to(self.device)
+        frameMask = self.activation(self.frameMask(frame_params)).to(self.device)
+
+        newIMU = imu_params * imuMask
+        newFrames = frame_params * frameMask
+        self.fused_params = torch.cat((newFrames, newIMU), dim=1).to(self.device)
+        return F.relu(self.fusion(self.fused_params)).to(self.device)
+
     def get_fusion_params(self, imu_params, frame_params):
         newIMU = imu_params * self.activation(imu_params)
         newFrames = frame_params * self.activation(frame_params)
 
-        self.fused_params = torch.cat((newIMU, newFrames), dim=1).to(self.device)
+        self.fused_params = torch.cat((newFrames, newIMU), dim=1).to(self.device)
         return self.fused_params
 
     def temporal_modelling(self, fused_params):
@@ -90,10 +102,14 @@ class FusionPipeline(nn.Module):
 
     def forward(self, batch_frame_data, batch_imu_data):
         imu_params, frame_params = self.get_encoder_params(batch_imu_data, batch_frame_data)
-        fused = self.get_fusion_params(imu_params, frame_params)
+        fused = self.fusion_network(imu_params, frame_params)
+        # fused = self.get_fusion_params(imu_params, frame_params)
         coordinate = self.temporal_modelling(fused)
 
         return coordinate
+
+    def get_num_correct(self, pred, label):
+        return (np.abs(pred - label) < 0.04).all(axis=1).mean()
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -160,9 +176,9 @@ if __name__ == "__main__":
                 tqdm_trainLoader = tqdm(unified_dataloader)
                 for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_trainLoader):
                     # frame_data = frame_data.permute(0, 3, 1, 2)
-                    gaze_data = torch.sum(gaze_data, axis=1) / 4.0
-                    coordinates = pipeline(frame_data, imu_data).to(device)
+                    gaze_data = torch.round((torch.sum(gaze_data, axis=1) / 4.0) * 100) / 100.0
                     optimizer.zero_grad()
+                    coordinates = torch.round(pipeline(frame_data, imu_data).to(device) * 100) / 100.0
                     loss = loss_fn(coordinates, gaze_data.float())
                     train_loss += loss.item()
                     tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} lowest: {}'.format(

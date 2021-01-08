@@ -63,6 +63,7 @@ class BUILDING_DATASETS:
                 self.dataset.POP_GAZE_DATA(self.frame_count)
                 self.gaze_arr = np.array(self.dataset.var.gaze_data).transpose()
                 _ = os.system('rm gaze_file.csv')
+                self.panda_data = {}
                 self.create_dataframes(subDir, 'gaze')
 
                 if not Path(self.root + 'gazeExtracted_data_' + str(self.trim_size) + '.pt').is_file():
@@ -127,7 +128,7 @@ class BUILDING_DATASETS:
     def load_unified_imu_dataset(self):     ## missing data in imu_CoffeeVendingMachine_S2
         self.folders_num = 0
         # sum = 0
-        for index, subDir in enumerate(tqdm(sorted(os.listdir(self.root)), desc="Building IMU Dataset")):
+        for index, subDir in enumerate(tqdm(sorted(os.listdir(self.root)), desc="Building IMU dataset")):
             if 'imu_' in subDir or 'val_' in subDir or 'test_' in subDir:
                 self.folders_num += 1
                 subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
@@ -173,7 +174,8 @@ class BUILDING_DATASETS:
             self.df_gaze = pd.DataFrame({ key:pd.Series(value) for key, value in self.panda_data.items()}).T
             self.df_gaze.columns =['Gaze_Pt_1', 'Gaze_Pt_2', 'Gaze_Pt_3', 'Gaze_Pt_4']
             self.df_gaze.to_csv('gaze_file.csv')
-        else:
+
+        elif dframe_type == 'imu':
             ## IMU
             for sec in range(self.frame_count):
                 # self.panda_data[sec] = list(tuple((sec, sec+2)))

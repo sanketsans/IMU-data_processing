@@ -44,16 +44,16 @@ class JSON_LOADER:
                         self.var.gaze_data[0].append(float(data['data']['gaze2d'][0]))
                         self.var.gaze_data[1].append(float(data['data']['gaze2d'][1]))
                     else:
-                        self.var.gaze_data[0].append(0.0)
-                        self.var.gaze_data[1].append(0.0)
+                        self.var.gaze_data[0].append(np.nan)
+                        self.var.gaze_data[1].append(np.nan)
 
                     self.var.timestamps_gaze.append(nT)
                     self.var.n_gaze_samples += 1
                     oT = nT
             except Exception as e:
                 self.var.timestamps_gaze.append(nT)
-                self.var.gaze_data[0].append(0.0)
-                self.var.gaze_data[1].append(0.0)
+                self.var.gaze_data[0].append(np.nan)
+                self.var.gaze_data[1].append(np.nan)
                 oT = nT
 
         if len(self.var.gaze_data[0])/4 < frame_count:
@@ -106,7 +106,6 @@ class JSON_LOADER:
             except Exception as e:
                 pass
 
-
         if len(self.var.imu_data_acc[0])/4 < frame_count:
             for i in range(len(self.var.imu_data_acc[0]), frame_count*4):
                 self.var.imu_data_acc[0].append(np.nan)
@@ -123,16 +122,11 @@ class JSON_LOADER:
 
 if __name__ == "__main__":
     folder = sys.argv[1]
-    dataset_folder = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
-    # os.chdir(dataset_folder)
-    for index, folder in enumerate(sorted(os.listdir(dataset_folder))):
-        if 'imu_' in folder or 'val_' in folder or 'test_' in folder:
-            folder = folder + '/' if folder[-1]!='/' else folder
-            os.chdir(dataset_folder + folder)
-            dataset = JSON_LOADER(folder)
-            print(folder, dataset.gaze_start_timestamp, dataset.imu_start_timestamp, dataset.start_timestamp)
-    # fig = plt.figure()
+    dataset_folder = '/home/sans/Downloads/gaze_data/'
 
+    os.chdir(dataset_folder + folder)
+    dataset = JSON_LOADER(folder)
+    print(dataset.POP_IMU_DATA(1500, True))
 # print(utils.get_sample_rate(var.timestamps_imu), len(var.timestamps_imu))
 # print(utils.get_sample_rate(var.timestamps_gaze), len(var.timestamps_gaze))
 # plt.subplot(221)

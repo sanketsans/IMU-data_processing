@@ -13,6 +13,7 @@ from tqdm import tqdm
 sys.path.append('../')
 from prepare_dataset import IMU_GAZE_FRAME_DATASET
 from variables import RootVariables
+from torch.utils.tensorboard import SummaryWriter
 
 class IMU_DATASET(Dataset):
     def __init__(self, imu_data, gaze_data, device=None):
@@ -24,6 +25,12 @@ class IMU_DATASET(Dataset):
         return len(self.imu_data) - 1
 
     def __getitem__(self, index):
+        while True:
+            check = np.isnan(self.gaze_data[index])
+            if check.any():
+                index += 1
+            else:
+                break
         return torch.from_numpy(self.imu_data[index]).to(self.device), torch.from_numpy(self.gaze_data[index]).to(self.device)
 
 
@@ -35,15 +42,16 @@ class IMU_PIPELINE(nn.Module):
         self.device = device
         self.trim_frame_size = trim_frame_size
         self.lstm = nn.LSTM(self.var.imu_input_size, self.var.hidden_size, self.var.num_layers, batch_first=True, dropout=0.2, bidirectional=True).to(self.device)
-        self.fc1 = nn.Linear(self.var.hidden_size*2, 128).to(self.device)
-        self.fc2 = nn.Linear(128, 2).to(self.device)
-        self.dropout = nn.Dropout(0.2)
+        self.fc1 = nn.Linear(self.var.hidden_size*2, 2).to(self.device)
+        # self.dropout = nn.Dropout(0.2)
         self.activation = nn.Sigmoid()
 
     def prepare_dataset(self):
         self.unified_dataset = IMU_GAZE_FRAME_DATASET(self.var.root, self.var.frame_size, self.trim_frame_size)
         return self.unified_dataset
 
+    def get_num_correct(self, pred, label):
+        return (np.abs(pred - label) < 0.04).all(axis=1).mean()
 
     def forward(self, x):
         # hidden = (h0, c0)
@@ -53,9 +61,7 @@ class IMU_PIPELINE(nn.Module):
         # c0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
 
         out, _ = self.lstm(x, (h0, c0))
-        print(out[:, :2, :].shape)
-        out = F.relu(self.dropout(self.fc1(out[:, -1, :])))
-        out = self.activation(self.fc2(out))
+        out = self.activation(self.fc1(out[:,-1,:]))
         return out
 
 if __name__ == "__main__":
@@ -74,16 +80,8 @@ if __name__ == "__main__":
     uni_imu_dataset = uni_dataset.imu_datasets      ## will already be standarized
     uni_gaze_dataset = uni_dataset.gaze_datasets
 
-    set_a = uni_imu_dataset[0: 1493, 2]
-    set_b = uni_imu_dataset[0: 1493, 3]
-    print(torch.max(set_a), torch.min(set_a))
-    print(torch.max(set_b), torch.min(set_b))
-
-    # plt.plot(x, set_a, 'r')
-    # plt.plot(x, set_b, 'g')
-
     optimizer = optim.Adam(pipeline.parameters(), lr=0.0001)
-    loss_fn = nn.SmoothL1Loss()
+    loss_fn = nn.L1Loss(reduction='sum')
     print(pipeline)
 
     if Path(pipeline.var.root + model_checkpoint).is_file():
@@ -99,6 +97,7 @@ if __name__ == "__main__":
             unified_dataset, unified_dataloader = None, None
             sliced_imu_dataset, sliced_gaze_dataset = None, None
             train_loss, val_loss, test_loss = 0.0, 0.0, 0.0
+            train_accuracy, test_accuracy, val_accuracy = 0.0, 0.0, 0.0
             capture, frame_count = None, None
 
             if 'imu_' in subDir:
@@ -116,20 +115,30 @@ if __name__ == "__main__":
                 unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
 
                 unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
+                sample_iter = iter(unified_dataloader)
+                imu, _ = next(sample_iter)
+                tb = SummaryWriter()
+                tb.add_graph(pipeline, imu)
+
 
                 tqdm_trainLoader = tqdm(unified_dataloader)
                 for batch_index, (imu_data, gaze_data) in enumerate(tqdm_trainLoader):
-                    gaze_data = torch.sum(gaze_data, axis=1) / 4.0
-                    coordinates = pipeline(imu_data.float()).to(device)
-                    print('gaze: ', gaze_data.shape)
+                    gaze_data = torch.round((torch.sum(gaze_data, axis=1) / 4.0) * 100) / 100.0
+                    optimizer.zero_grad()
+                    coordinates = torch.round(pipeline(imu_data.float()).to(device) * 100) / 100.0
                     loss = loss_fn(coordinates, gaze_data.float())
                     train_loss += loss.item()
-                    tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} lowest: {}'.format(
-                        train_loss/(batch_index+1), optimizer.param_groups[0]['lr'], current_loss))
+                    train_accuracy += pipeline.get_num_correct(coordinates, gaze_data.float())
+                    tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} accuracy: {:.4} lowest: {}'.format(
+                        train_loss/(batch_index+1), optimizer.param_groups[0]['lr'],
+                        train_accuracy/(batch_index+1), current_loss))
 
-                    optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
+
+                tb.add_scalar("Loss", train_loss, epoch)
+                tb.add_scalar("Correct", train_accuracy * 100.0 , epoch)
+                tb.add_scalar("Accuracy", train_accuracy/len(unified_dataloader) * 100.0, epoch)
 
                 if ((train_loss/len(unified_dataloader)) < current_loss):
                     current_loss = (train_loss/len(unified_dataloader))
@@ -159,14 +168,24 @@ if __name__ == "__main__":
 
                     unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
+                    sample_iter = iter(unified_dataloader)
+                    imu, _ = next(sample_iter)
+                    tb = SummaryWriter()
+                    tb.add_graph(pipeline, imu)
+
                     tqdm_valLoader = tqdm(unified_dataloader)
                     for batch_index, (imu_data, gaze_data) in enumerate(tqdm_valLoader):
-                        gaze_data = torch.sum(gaze_data, axis=1) / float(gaze_data.shape[1])
-                        coordinates = pipeline(imu_data.float()).to(device)
+                        gaze_data = torch.round((torch.sum(gaze_data, axis=1) / 4.0) * 100) / 100.0
+                        coordinates = torch.round(pipeline(imu_data.float()).to(device) * 100) / 100.0
                         loss = loss_fn(coordinates, gaze_data.float())
                         val_loss += loss.item()
-                        tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                            val_loss/(batch_index+1), optimizer.param_groups[0]['lr']))
+                        val_accuracy += pipeline.get_num_correct(coordinates, gaze_data.float())
+                        tqdm_valLoader.set_description('loss: {:.4} lr:{:.6} accuracy: {:.4}'.format(
+                            val_loss/(batch_index+1),optimizer.param_groups[0]['lr'],  val_accuracy/(batch_index+1)))
+
+                    tb.add_scalar("Loss", val_loss, epoch)
+                    tb.add_scalar("Correct", val_accuracy * 100.0 , epoch)
+                    tb.add_scalar("Accuracy", val_accuracy/len(unified_dataloader) * 100.0, epoch)
 
                     with open(pipeline.var.root + 'signal_validation_loss.txt', 'a') as f:
                         f.write(str(val_loss/len(unified_dataloader)) + '\n')
@@ -187,14 +206,25 @@ if __name__ == "__main__":
 
                     unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
+                    sample_iter = iter(unified_dataloader)
+                    imu, _ = next(sample_iter)
+                    tb = SummaryWriter()
+                    tb.add_graph(pipeline, imu)
+
                     tqdm_testLoader = tqdm(unified_dataloader)
                     for batch_index, (imu_data, gaze_data) in enumerate(tqdm_testLoader):
-                        gaze_data = torch.sum(gaze_data, axis=1) / 4.0
-                        coordinates = pipeline(imu_data.float()).to(device)
+                        gaze_data = torch.round((torch.sum(gaze_data, axis=1) / 4.0) * 100) / 100.0
+                        coordinates = torch.round(pipeline(imu_data.float()).to(device) * 100) / 100.0
                         loss = loss_fn(coordinates, gaze_data.float())
                         test_loss += loss.item()
+                        test_accuracy += pipeline.get_num_correct(coordinates, gaze_data.float())
                         tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                            test_loss/(batch_index+1), optimizer.param_groups[0]['lr']))
+                            test_loss/(batch_index+1), optimizer.param_groups[0]['lr'],
+                            test_accuracy/(batch_index+1)))
+
+                    tb.add_scalar("Loss", test_loss, epoch)
+                    tb.add_scalar("Correct", test_accuracy, epoch)
+                    tb.add_scalar("Accuracy", test_accuracy/len(unified_dataloader), epoch)
 
                     with open(pipeline.var.root + 'signal_testing_loss.txt', 'a') as f:
                         f.write(str(test_loss/len(unified_dataloader)) + '\n')
