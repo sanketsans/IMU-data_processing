@@ -30,8 +30,8 @@ class VISION_PIPELINE(nn.Module):
         # for i in range(len(self.net) - 1):
         #     self.net[i][1] = nn.ReLU()
         self.fc1 = nn.Linear(1024*4*4, 4096).to(self.device)
-        self.fc2 = nn.Linear(4096, 1024).to(self.device)
-        self.fc3 = nn.Linear(1024, 2).to(self.device)
+        self.fc2 = nn.Linear(4096, 256).to(self.device)
+        self.fc3 = nn.Linear(256, 2).to(self.device)
         self.dropout = nn.Dropout(0.2)
         self.activation = nn.Sigmoid()
         # self.net[8][1] = nn.ReLU(inplace=False)
@@ -69,7 +69,7 @@ class VISION_DATASET(Dataset):
     def __getitem__(self, index):
         checkedLast = False
         while True:
-            check = np.isnan(self.gazedata[index])
+            check = np.isnan(self.gaze_data[index])
             if check.any():
                 index = (index - 1) if checkedLast else (index + 1)
                 if index == self.__len__():
@@ -114,6 +114,8 @@ if __name__ == "__main__":
             unified_dataset, unified_dataloader = None, None
             sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset = None, None, None
             train_loss, val_loss, test_loss = 0.0, 0.0, 0.0
+            total_train_accuracy, total_val_accuracy, total_test_accuracy = 0.0, 0.0, 0.0
+            total_train_correct, total_val_correct, total_test_correct = 0.0, 0.0, 0.0
             capture, frame_count = None, None
 
             if 'imu_' in subDir:
@@ -131,6 +133,7 @@ if __name__ == "__main__":
 
                 unified_dataset = VISION_DATASET(sliced_frame_dataset, sliced_gaze_dataset, device)
                 unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
+                tb = SummaryWriter('runs/Vision_outputs/')
                 tqdm_trainLoader = tqdm(unified_dataloader)
                 for batch_index, (frame_data, gaze_data) in enumerate(tqdm_trainLoader):
                     gaze_data = torch.round((torch.sum(gaze_data, axis=1) / 4.0) * 100) / 100.0
@@ -138,8 +141,11 @@ if __name__ == "__main__":
                     coordinates = torch.round(pipeline(frame_data).to(device) * 100) / 100.0
                     loss = loss_fn(coordinates, gaze_data.float())
                     train_loss += loss.item()
-                    tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} lowest: {}'.format(
-                        train_loss/(batch_index+1), optimizer.param_groups[0]['lr'], current_loss))
+                    total_train_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
+                    total_train_accuracy = total_train_correct / (coordinates.size(0) * (batch_index+1))
+                    tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} accuracy: {:.4} lowest: {}'.format(
+                        train_loss/(batch_index+1), optimizer.param_groups[0]['lr'],
+                        total_train_accuracy * 100.0, current_loss))
 
                     loss.backward()
                     optimizer.step()
@@ -155,6 +161,10 @@ if __name__ == "__main__":
                     print('Model saved')
 
                 start_index = end_index
+                pipeline.eval()
+                tb.add_scalar("Loss", train_loss, epoch)
+                tb.add_scalar("Correct", total_train_correct * 100.0 , epoch)
+                tb.add_scalar("Accuracy", total_train_accuracy * 100.0, epoch)
                 with open(pipeline.var.root + 'vision_train_loss.txt', 'a') as f:
                     f.write(str(train_loss/len(unified_dataloader)) + '\n')
                     f.close()
@@ -168,19 +178,26 @@ if __name__ == "__main__":
                     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
                     end_index = start_index + frame_count - trim_frame_size*2
                     sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
-
                     sliced_frame_dataset = np.load(str(pipeline.var.frame_size) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
 
                     unified_dataset = VISION_DATASET(sliced_frame_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
+                    tb = SummaryWriter('runs/Vision_outputs/')
                     tqdm_valLoader = tqdm(unified_dataloader)
                     for batch_index, (frame_data, gaze_data) in enumerate(tqdm_valLoader):
                         gaze_data = torch.sum(gaze_data, axis=1) / float(gaze_data.shape[1])
                         coordinates = pipeline(frame_data).to(device)
                         loss = loss_fn(coordinates, gaze_data.float())
                         val_loss += loss.item()
-                        tqdm_valLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                            val_loss/(batch_index+1), optimizer.param_groups[0]['lr']))
+                        total_val_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
+                        total_val_accuracy = total_val_correct / (coordinates.size(0) * (batch_index+1))
+                        tqdm_valLoader.set_description('loss: {:.4} lr:{:.6} accuracy: {:.4} '.format(
+                            val_loss/(batch_index+1), optimizer.param_groups[0]['lr'],
+                            total_val_accuracy * 100.0))
+
+                    tb.add_scalar("Loss", val_loss, epoch)
+                    tb.add_scalar("Correct", total_val_correct * 100.0 , epoch)
+                    tb.add_scalar("Accuracy", total_val_accuracy * 100.0, epoch)
 
                     with open(pipeline.var.root + 'vision_validation_loss.txt', 'a') as f:
                         f.write(str(val_loss/len(unified_dataloader)) + '\n')
@@ -202,14 +219,22 @@ if __name__ == "__main__":
 
                     unified_dataset = VISION_DATASET(sliced_frame_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
+                    tb = SummaryWriter('runs/Vision_outputs/')
                     tqdm_testLoader = tqdm(unified_dataloader)
                     for batch_index, (frame_data, gaze_data) in enumerate(tqdm_testLoader):
                         gaze_data = torch.sum(gaze_data, axis=1) / 4.0
                         coordinates = pipeline(frame_data).to(device)
                         loss = loss_fn(coordinates, gaze_data.float())
                         test_loss += loss.item()
-                        tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                            test_loss/(batch_index+1), optimizer.param_groups[0]['lr']))
+                        total_test_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
+                        total_test_accuracy = total_test_correct / (coordinates.size(0) * (batch_index+1))
+                        tqdm_testLoader.set_description('loss: {:.4} lr:{:.6} accuracy: {:.4}'.format(
+                            test_loss/(batch_index+1), optimizer.param_groups[0]['lr'],
+                            total_test_accuracy * 100.0))
+
+                    tb.add_scalar("Loss", test_loss, epoch)
+                    tb.add_scalar("Correct", total_test_correct * 100.0 , epoch)
+                    tb.add_scalar("Accuracy", total_test_accuracy * 100.0, epoch)
 
                     with open(pipeline.var.root + 'vision_testing_loss.txt', 'a') as f:
                         f.write(str(test_loss/len(unified_dataloader)) + '\n')

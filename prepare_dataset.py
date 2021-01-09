@@ -29,7 +29,7 @@ class UNIFIED_DATASET(Dataset):
     def __getitem__(self, index):
         checkedLast = False
         while True:
-            check = np.isnan(self.gazedata[index])
+            check = np.isnan(self.gaze_data[index])
             if check.any():
                 index = (index - 1) if checkedLast else (index + 1)
                 if index == self.__len__():

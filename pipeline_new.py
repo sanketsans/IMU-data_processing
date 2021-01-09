@@ -15,7 +15,7 @@ from encoder_vis import VIS_ENCODER
 from prepare_dataset import IMU_GAZE_FRAME_DATASET, UNIFIED_DATASET
 # from getDataset import FRAME_IMU_DATASET
 from variables import RootVariables
-# from model_params import efficientPipeline
+from torch.utils.tensorboard import SummaryWriter
 
 class FusionPipeline(nn.Module):
     def __init__(self, args, checkpoint, trim_frame_size=150, device=None):
@@ -173,6 +173,7 @@ if __name__ == "__main__":
 
                 unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
                 unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
+                tb = SummaryWriter('runs/VisSig_outputs/')
                 tqdm_trainLoader = tqdm(unified_dataloader)
                 for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_trainLoader):
                     # frame_data = frame_data.permute(0, 3, 1, 2)
@@ -212,11 +213,11 @@ if __name__ == "__main__":
                     end_index = start_index + frame_count - trim_frame_size*2
                     sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
                     sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
-
                     sliced_frame_dataset = np.load(str(pipeline.var.frame_size) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
 
                     unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
+                    tb = SummaryWriter('runs/VisSig_outputs/')
                     tqdm_valLoader = tqdm(unified_dataloader)
                     for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_valLoader):
                         gaze_data = torch.sum(gaze_data, axis=1) / float(gaze_data.shape[1])
@@ -242,11 +243,11 @@ if __name__ == "__main__":
                     end_index = start_index + frame_count - trim_frame_size*2
                     sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
                     sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
-
                     sliced_frame_dataset = np.load(str(pipeline.var.frame_size) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
 
                     unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
+                    tb = SummaryWriter('runs/VisSig_outputs/')
                     tqdm_testLoader = tqdm(unified_dataloader)
                     for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_testLoader):
                         gaze_data = torch.sum(gaze_data, axis=1) / 4.0

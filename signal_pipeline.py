@@ -27,7 +27,7 @@ class IMU_DATASET(Dataset):
     def __getitem__(self, index):
         checkedLast = False
         while True:
-            check = np.isnan(self.gazedata[index])
+            check = np.isnan(self.gaze_data[index])
             if check.any():
                 index = (index - 1) if checkedLast else (index + 1)
                 if index == self.__len__():
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     uni_gaze_dataset = uni_dataset.gaze_datasets
 
     optimizer = optim.Adam(pipeline.parameters(), lr=0.0001)
-    loss_fn = nn.SmootL1Loss()
+    loss_fn = nn.SmoothL1Loss()
     print(pipeline)
 
     if Path(pipeline.var.root + model_checkpoint).is_file():
@@ -124,11 +124,7 @@ if __name__ == "__main__":
                 unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
 
                 unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
-                sample_iter = iter(unified_dataloader)
-                imu, _ = next(sample_iter)
                 tb = SummaryWriter('runs/Signal_outputs/')
-                tb.add_graph(pipeline, imu.float())
-
 
                 tqdm_trainLoader = tqdm(unified_dataloader)
                 for batch_index, (imu_data, gaze_data) in enumerate(tqdm_trainLoader):
@@ -146,10 +142,6 @@ if __name__ == "__main__":
                     loss.backward()
                     optimizer.step()
 
-                tb.add_scalar("Loss", train_loss, epoch)
-                tb.add_scalar("Correct", total_train_correct * 100.0 , epoch)
-                tb.add_scalar("Accuracy", total_train_accuracy * 100.0, epoch)
-
                 if ((train_loss/len(unified_dataloader)) < current_loss):
                     current_loss = (train_loss/len(unified_dataloader))
                     torch.save({
@@ -161,6 +153,10 @@ if __name__ == "__main__":
                     print('Model saved')
 
                 start_index = end_index
+                pipeline.eval()
+                tb.add_scalar("Loss", train_loss, epoch)
+                tb.add_scalar("Correct", total_train_correct * 100.0 , epoch)
+                tb.add_scalar("Accuracy", total_train_accuracy * 100.0, epoch)
                 with open(pipeline.var.root + 'signal_train_loss.txt', 'a') as f:
                     f.write(str(train_loss/len(unified_dataloader)) + '\n')
                     f.close()
@@ -181,10 +177,7 @@ if __name__ == "__main__":
 
                     unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
-                    sample_iter = iter(unified_dataloader)
-                    imu, _ = next(sample_iter)
                     tb = SummaryWriter('runs/Signal_outputs/')
-                    tb.add_graph(pipeline, imu.float())
 
                     tqdm_valLoader = tqdm(unified_dataloader)
                     for batch_index, (imu_data, gaze_data) in enumerate(tqdm_valLoader):
@@ -222,10 +215,7 @@ if __name__ == "__main__":
 
                     unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
-                    sample_iter = iter(unified_dataloader)
-                    imu, _ = next(sample_iter)
                     tb = SummaryWriter('runs/Signal_outputs/')
-                    tb.add_graph(pipeline, imu.float())
 
                     tqdm_testLoader = tqdm(unified_dataloader)
                     for batch_index, (imu_data, gaze_data) in enumerate(tqdm_testLoader):
