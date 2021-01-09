@@ -27,10 +27,13 @@ class UNIFIED_DATASET(Dataset):
         return len(self.imu_data) -1
 
     def __getitem__(self, index):
+        checkedLast = False
         while True:
-            check = np.isnan(self.gaze_data[index])
+            check = np.isnan(self.gazedata[index])
             if check.any():
-                index += 1
+                index = (index - 1) if checkedLast else (index + 1)
+                if index == self.__len__():
+                    checkedLast = True
             else:
                 break
         return self.transforms(self.frame_data[index]).to(self.device), torch.from_numpy(np.concatenate((self.imu_data[index], self.imu_data[index+1]), axis=0)).to(self.device), torch.from_numpy(self.gaze_data[index]).to(self.device)

@@ -67,10 +67,13 @@ class VISION_DATASET(Dataset):
         return (np.abs(pred - label) < 0.04).all(axis=1).mean()
 
     def __getitem__(self, index):
+        checkedLast = False
         while True:
-            check = np.isnan(self.gaze_data[index])
+            check = np.isnan(self.gazedata[index])
             if check.any():
-                index += 1
+                index = (index - 1) if checkedLast else (index + 1)
+                if index == self.__len__():
+                    checkedLast = True
             else:
                 break
         return self.transforms(self.frame_data[index]).to(self.device), torch.from_numpy(self.gaze_data[index]).to(self.device)
