@@ -45,10 +45,18 @@ class IMU_PIPELINE(nn.Module):
         self.device = device
         self.trim_frame_size = trim_frame_size
         self.lstm = nn.LSTM(self.var.imu_input_size, self.var.hidden_size, self.var.num_layers, batch_first=True, dropout=0.2, bidirectional=True).to(self.device)
-        self.fc1 = nn.Linear(self.var.hidden_size*2, 512).to(self.device)
-        self.fc2 = nn.Linear(512, 2).to(self.device)
+        self.fc1 = nn.Linear(self.var.hidden_size*2, 1024).to(self.device)
+        self.fc2 = nn.Linear(1024, 2).to(self.device)
         self.dropout = nn.Dropout(0.2)
         self.activation = nn.Sigmoid()
+
+        self.loss_fn = nn.SmoothL1Loss()
+        self.tensorboard_folder = 'batch_64_Signal_outputs/'
+        self.total_loss, self.current_loss = 0.0, 10000.0
+        self.uni_imu_dataset, self.uni_gaze_dataset = None, None
+        self.sliced_imu_dataset, self.sliced_gaze_dataset = None, None
+        self.unified_dataset = None
+        self.start_index, self.end_index = 0, 0
 
     def prepare_dataset(self):
         self.unified_dataset = IMU_GAZE_FRAME_DATASET(self.var.root, self.var.frame_size, self.trim_frame_size)
@@ -69,43 +77,67 @@ class IMU_PIPELINE(nn.Module):
         out = self.activation(self.fc2(out))
         return out*1000.0
 
+    def engine(self, data_type='imu_', optimizer=None):
+        self.total_loss = 0.0
+        capture = cv2.VideoCapture('scenevideo.mp4')
+        frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.end_index = self.start_index + frame_count - self.trim_frame_size*2
+
+        self.sliced_imu_dataset = self.uni_imu_dataset[self.start_index: self.end_index].detach().cpu().numpy()
+        self.sliced_gaze_dataset = self.uni_gaze_dataset[self.start_index: self.end_index].detach().cpu().numpy()
+        self.unified_dataset = IMU_DATASET(self.sliced_imu_dataset, self.sliced_gaze_dataset, self.device)
+
+        unified_dataloader = torch.utils.data.DataLoader(self.unified_dataset, batch_size=self.var.batch_size, num_workers=0, drop_last=True)
+        tqdm_dataLoader = tqdm(unified_dataloader)
+        for batch_index, (imu_data, gaze_data) in enumerate(tqdm_dataLoader):
+            gaze_data = (torch.sum(gaze_data, axis=1) / 4.0)
+            coordinates = self.forward(imu_data.float()).to(self.device)
+            loss = self.loss_fn(coordinates, gaze_data.float())
+            self.total_loss += loss.item()
+            # total_train_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
+            # total_train_accuracy = total_train_correct / (coordinates.size(0) * (batch_index+1))
+            tqdm_dataLoader.set_description(data_type + '_loss: {:.4} lr:{:.6} lowest: {}'.format(
+                self.total_loss, optimizer.param_groups[0]['lr'],
+                self.current_loss))
+
+            if 'imu_' in data_type:
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+        self.start_index = self.end_index
+
+        return self.total_loss
+
+
+
 if __name__ == "__main__":
     arg = sys.argv[1]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_checkpoint = 'signal_pipeline_checkpoint.pth'
 
-    n_epochs = 51
-    folders_num = 0
-    start_index = 0
-    current_loss = 1000.0
+    n_epochs = 1   ## 250 done, 251 needs to start
     trim_frame_size = 150
 
     pipeline = IMU_PIPELINE(trim_frame_size, device)
 
     uni_dataset = pipeline.prepare_dataset()
-    uni_imu_dataset = uni_dataset.imu_datasets      ## will already be standarized
-    uni_gaze_dataset = uni_dataset.gaze_datasets
+    pipeline.uni_imu_dataset = uni_dataset.imu_datasets      ## will already be standarized
+    pipeline.uni_gaze_dataset = uni_dataset.gaze_datasets
 
     optimizer = optim.Adam(pipeline.parameters(), lr=1e-5)
-    loss_fn = nn.SmoothL1Loss()
     print(pipeline)
 
     if Path(pipeline.var.root + model_checkpoint).is_file():
         checkpoint = torch.load(pipeline.var.root + model_checkpoint)
         pipeline.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        current_loss = checkpoint['loss']
+        pipeline.current_loss = checkpoint['loss']
         print('Model loaded')
 
     for epoch in tqdm(range(n_epochs), desc="epochs"):
-        start_index = 0
         for index, subDir in enumerate(sorted(os.listdir(pipeline.var.root))):
-            unified_dataset, unified_dataloader = None, None
-            sliced_imu_dataset, sliced_gaze_dataset = None, None
             train_loss, val_loss, test_loss = 0.0, 0.0, 0.0
-            total_train_accuracy, total_val_accuracy, total_test_accuracy = 0.0, 0.0, 0.0
-            total_train_correct, total_val_correct, total_test_correct = 0.0, 0.0, 0.0
-            capture, frame_count = None, None
 
             if 'imu_' in subDir:
                 pipeline.train()
@@ -113,53 +145,24 @@ if __name__ == "__main__":
                 subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
                 os.chdir(pipeline.var.root + subDir)
                 if epoch == 0 and 'del' in arg:
-                    _ = os.system('rm -rf runs/Signal_outputs')
+                    _ = os.system('rm -rf runs/' + pipeline.tensorboard_folder)
 
-                capture = cv2.VideoCapture('scenevideo.mp4')
-                frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                end_index = start_index + frame_count - trim_frame_size*2
+                train_loss = pipeline.engine('imu_', optimizer)
 
-                sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
-                sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
-
-                unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
-
-                unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
-                tb = SummaryWriter('runs/Signal_outputs/')
-
-                tqdm_trainLoader = tqdm(unified_dataloader)
-                for batch_index, (imu_data, gaze_data) in enumerate(tqdm_trainLoader):
-                    gaze_data = (torch.sum(gaze_data, axis=1) / 4.0)
-                    optimizer.zero_grad()
-                    coordinates = pipeline(imu_data.float()).to(device)
-                    loss = loss_fn(coordinates, gaze_data.float())
-                    train_loss += loss.item()
-                    total_train_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
-                    total_train_accuracy = total_train_correct / (coordinates.size(0) * (batch_index+1))
-                    tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} lowest: {}'.format(
-                        train_loss, optimizer.param_groups[0]['lr'],
-                        current_loss))
-
-                    loss.backward()
-                    optimizer.step()
-
-                if (train_loss < current_loss):
-                    current_loss = train_loss
+                if (train_loss < pipeline.current_loss):
+                    pipeline.current_loss = train_loss
                     torch.save({
                                 'epoch': epoch,
                                 'model_state_dict': pipeline.state_dict(),
                                 'optimizer_state_dict': optimizer.state_dict(),
-                                'loss': current_loss
+                                'loss': pipeline.current_loss
                                 }, pipeline.var.root + model_checkpoint)
                     print('Model saved')
 
-                start_index = end_index
                 pipeline.eval()
+                tb = SummaryWriter('runs/' + pipeline.tensorboard_folder)
                 tb.add_scalar("Loss", train_loss, epoch)
                 tb.close()
-                with open(pipeline.var.root + 'signal_train_loss.txt', 'a') as f:
-                    f.write(str(train_loss) + '\n')
-                    f.close()
 
             if 'val_' in subDir:
                 pipeline.eval()
@@ -167,37 +170,13 @@ if __name__ == "__main__":
                     subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
                     os.chdir(pipeline.var.root + subDir)
                     if epoch == 0 and 'del' in arg:
-                        _ = os.system('rm -rf runs/Signal_outputs')
+                        _ = os.system('rm -rf runs/' + pipeline.tensorboard_folder)
 
-                    capture = cv2.VideoCapture('scenevideo.mp4')
-                    frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                    end_index = start_index + frame_count - trim_frame_size*2
-                    sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
-                    sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
+                    val_loss = pipeline.engine('val_')
 
-                    unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
-                    unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
-                    tb = SummaryWriter('runs/Signal_outputs/')
-
-                    tqdm_valLoader = tqdm(unified_dataloader)
-                    for batch_index, (imu_data, gaze_data) in enumerate(tqdm_valLoader):
-                        gaze_data = (torch.sum(gaze_data, axis=1) / 4.0)
-                        coordinates = pipeline(imu_data.float()).to(device)
-                        loss = loss_fn(coordinates, gaze_data.float())
-                        val_loss += loss.item()
-                        total_val_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
-                        total_val_accuracy = total_val_correct / (coordinates.size(0) * (batch_index+1))
-                        tqdm_valLoader.set_description('loss: {:.4} lr:{:.6} '.format(
-                            val_loss,optimizer.param_groups[0]['lr']))
-
+                    tb = SummaryWriter('runs/' + pipeline.tensorboard_folder)
                     tb.add_scalar("Loss", val_loss, epoch)
                     tb.close()
-
-                    with open(pipeline.var.root + 'signal_validation_loss.txt', 'a') as f:
-                        f.write(str(val_loss) + '\n')
-                        f.close()
-
-                start_index = end_index
 
             if 'test_' in subDir:
                 pipeline.eval()
@@ -205,36 +184,12 @@ if __name__ == "__main__":
                     subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
                     os.chdir(pipeline.var.root + subDir)
                     if epoch == 0 and 'del' in arg:
-                        _ = os.system('rm -rf runs/Signal_outputs')
-                    capture = cv2.VideoCapture('scenevideo.mp4')
-                    frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                    end_index = start_index + frame_count - trim_frame_size*2
-                    sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
-                    sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
+                        _ = os.system('rm -rf runs/' + pipeline.tensorboard_folder)
 
-                    unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
-                    unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
-                    tb = SummaryWriter('runs/Signal_outputs/')
-
-                    tqdm_testLoader = tqdm(unified_dataloader)
-                    for batch_index, (imu_data, gaze_data) in enumerate(tqdm_testLoader):
-                        gaze_data = (torch.sum(gaze_data, axis=1) / 4.0)
-                        coordinates = pipeline(imu_data.float()).to(device)
-                        loss = loss_fn(coordinates, gaze_data.float())
-                        test_loss += loss.item()
-                        total_test_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
-                        total_test_accuracy = total_test_correct / (coordinates.size(0) * (batch_index + 1))
-                        tqdm_testLoader.set_description('loss: {:.4} lr:{:.6}'.format(
-                            test_loss, optimizer.param_groups[0]['lr']))
-
+                    test_loss = pipeline.engine('test_')
+                    tb = SummaryWriter('runs/' + pipeline.tensorboard_folder)
                     tb.add_scalar("Loss", test_loss, epoch)
                     tb.close()
-
-                    with open(pipeline.var.root + 'signal_testing_loss.txt', 'a') as f:
-                        f.write(str(test_loss) + '\n')
-                        f.close()
-
-                start_index = end_index
 
         if epoch % 5 == 0:
             torch.save({
