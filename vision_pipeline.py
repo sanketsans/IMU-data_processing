@@ -30,8 +30,8 @@ class VISION_PIPELINE(nn.Module):
         # for i in range(len(self.net) - 1):
         #     self.net[i][1] = nn.ReLU()
         self.fc1 = nn.Linear(1024*4*4, 4096).to(self.device)
-        self.fc2 = nn.Linear(4096, 256).to(self.device)
-        self.fc3 = nn.Linear(256, 2).to(self.device)
+        self.fc2 = nn.Linear(4096, 2048).to(self.device)
+        self.fc3 = nn.Linear(2048, 2).to(self.device)
         self.dropout = nn.Dropout(0.2)
         self.activation = nn.Sigmoid()
         # self.net[8][1] = nn.ReLU(inplace=False)
@@ -51,7 +51,7 @@ class VISION_PIPELINE(nn.Module):
         out = F.relu(self.dropout(self.fc2(out)))
         out = self.activation(self.dropout(self.fc3(out)))
 
-        return out
+        return out*1000.0
 
 class VISION_DATASET(Dataset):
     def __init__(self, frame_dataset, gaze_dataset, device=None):
@@ -76,7 +76,7 @@ class VISION_DATASET(Dataset):
                     checkedLast = True
             else:
                 break
-        return self.transforms(self.frame_data[index]).to(self.device), torch.from_numpy(self.gaze_data[index]).to(self.device)
+        return self.transforms(self.frame_data[index]).to(self.device), torch.from_numpy(self.gaze_data[index]*1000.0).to(self.device)
 
 
 if __name__ == "__main__":
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     uni_dataset = pipeline.prepare_dataset()
     # uni_imu_dataset = uni_dataset.imu_datasets      ## will already be standarized
     uni_gaze_dataset = uni_dataset.gaze_datasets
-    optimizer = optim.Adam(pipeline.parameters(), lr=0.0001)
+    optimizer = optim.Adam(pipeline.parameters(), lr=1e-5)
     loss_fn = nn.SmoothL1Loss()
 
     if Path(pipeline.var.root + model_checkpoint).is_file():
@@ -128,7 +128,6 @@ if __name__ == "__main__":
                 end_index = start_index + frame_count - trim_frame_size*2
                 sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
 
-                # sliced_frame_dataset = torch.load('framesExtracted_data_' + str(trim_frame_size) + '.pt')
                 sliced_frame_dataset = np.load(str(pipeline.var.frame_size) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
 
                 unified_dataset = VISION_DATASET(sliced_frame_dataset, sliced_gaze_dataset, device)
@@ -143,9 +142,8 @@ if __name__ == "__main__":
                     train_loss += loss.item()
                     total_train_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
                     total_train_accuracy = total_train_correct / (coordinates.size(0) * (batch_index+1))
-                    tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} accuracy: {:.4} lowest: {}'.format(
-                        train_loss/(batch_index+1), optimizer.param_groups[0]['lr'],
-                        total_train_accuracy * 100.0, current_loss))
+                    tqdm_trainLoader.set_description('loss: {:.4} lr:{:.6} lowest: {}'.format(
+                        train_loss, optimizer.param_groups[0]['lr'], current_loss))
 
                     loss.backward()
                     optimizer.step()
@@ -163,10 +161,9 @@ if __name__ == "__main__":
                 start_index = end_index
                 pipeline.eval()
                 tb.add_scalar("Loss", train_loss, epoch)
-                tb.add_scalar("Correct", total_train_correct * 100.0 , epoch)
-                tb.add_scalar("Accuracy", total_train_accuracy * 100.0, epoch)
+                tb.close()
                 with open(pipeline.var.root + 'vision_train_loss.txt', 'a') as f:
-                    f.write(str(train_loss/len(unified_dataloader)) + '\n')
+                    f.write(str(train_loss) + '\n')
                     f.close()
 
             if 'val_' in subDir:
@@ -191,16 +188,14 @@ if __name__ == "__main__":
                         val_loss += loss.item()
                         total_val_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
                         total_val_accuracy = total_val_correct / (coordinates.size(0) * (batch_index+1))
-                        tqdm_valLoader.set_description('loss: {:.4} lr:{:.6} accuracy: {:.4} '.format(
-                            val_loss/(batch_index+1), optimizer.param_groups[0]['lr'],
-                            total_val_accuracy * 100.0))
+                        tqdm_valLoader.set_description('loss: {:.4} lr:{:.6} '.format(
+                            val_loss, optimizer.param_groups[0]['lr']))
 
                     tb.add_scalar("Loss", val_loss, epoch)
-                    tb.add_scalar("Correct", total_val_correct * 100.0 , epoch)
-                    tb.add_scalar("Accuracy", total_val_accuracy * 100.0, epoch)
+                    tb.close()
 
                     with open(pipeline.var.root + 'vision_validation_loss.txt', 'a') as f:
-                        f.write(str(val_loss/len(unified_dataloader)) + '\n')
+                        f.write(str(val_loss) + '\n')
                         f.close()
 
                 start_index = end_index
@@ -228,16 +223,14 @@ if __name__ == "__main__":
                         test_loss += loss.item()
                         total_test_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
                         total_test_accuracy = total_test_correct / (coordinates.size(0) * (batch_index+1))
-                        tqdm_testLoader.set_description('loss: {:.4} lr:{:.6} accuracy: {:.4}'.format(
-                            test_loss/(batch_index+1), optimizer.param_groups[0]['lr'],
-                            total_test_accuracy * 100.0))
+                        tqdm_testLoader.set_description('loss: {:.4} lr:{:.6} '.format(
+                            test_loss, optimizer.param_groups[0]['lr']))
 
                     tb.add_scalar("Loss", test_loss, epoch)
-                    tb.add_scalar("Correct", total_test_correct * 100.0 , epoch)
-                    tb.add_scalar("Accuracy", total_test_accuracy * 100.0, epoch)
+                    tb.close()
 
                     with open(pipeline.var.root + 'vision_testing_loss.txt', 'a') as f:
-                        f.write(str(test_loss/len(unified_dataloader)) + '\n')
+                        f.write(str(test_loss) + '\n')
                         f.close()
 
                 start_index = end_index
