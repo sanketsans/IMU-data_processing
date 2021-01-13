@@ -45,14 +45,14 @@ class IMU_PIPELINE(nn.Module):
         self.device = device
         self.trim_frame_size = trim_frame_size
         self.lstm = nn.LSTM(self.var.imu_input_size, self.var.hidden_size, self.var.num_layers, batch_first=True, dropout=0.2, bidirectional=True).to(self.device)
-        self.fc1 = nn.Linear(self.var.hidden_size*2, 1024).to(self.device)
-        self.fc2 = nn.Linear(1024, 2).to(self.device)
+        self.fc1 = nn.Linear(self.var.hidden_size*2, 2).to(self.device)
+        # self.fc2 = nn.Linear(1024, 2).to(self.device)
         self.dropout = nn.Dropout(0.2)
         self.activation = nn.Sigmoid()
 
         self.loss_fn = nn.SmoothL1Loss()
         self.tensorboard_folder = 'batch_64_Signal_outputs/'
-        self.total_loss, self.current_loss = 0.0, 10000.0
+        self.total_loss, self.current_loss, self.total_accuracy = 0.0, 10000.0, 0.0
         self.uni_imu_dataset, self.uni_gaze_dataset = None, None
         self.sliced_imu_dataset, self.sliced_gaze_dataset = None, None
         self.unified_dataset = None
@@ -63,7 +63,7 @@ class IMU_PIPELINE(nn.Module):
         return self.unified_dataset
 
     def get_num_correct(self, pred, label):
-        return (torch.abs(pred - label) <= 10.0).all(axis=1).sum().item()
+        return (torch.abs(pred - label) <= 30.0).all(axis=1).sum().item()
 
     def forward(self, x):
         # hidden = (h0, c0)
@@ -73,12 +73,11 @@ class IMU_PIPELINE(nn.Module):
         # c0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
 
         out, _ = self.lstm(x, (h0, c0))
-        out = F.relu(self.dropout(self.fc1(out[:,-1,:])))
-        out = self.activation(self.fc2(out))
+        out = self.activation(self.fc1(out[:,-1,:]))
         return out*1000.0
 
     def engine(self, data_type='imu_', optimizer=None):
-        self.total_loss = 0.0
+        self.total_loss, self.total_accuracy = 0.0, 0.0
         capture = cv2.VideoCapture('scenevideo.mp4')
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         self.end_index = self.start_index + frame_count - self.trim_frame_size*2
@@ -94,11 +93,10 @@ class IMU_PIPELINE(nn.Module):
             coordinates = self.forward(imu_data.float()).to(self.device)
             loss = self.loss_fn(coordinates, gaze_data.float())
             self.total_loss += loss.item()
-            # total_train_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
-            # total_train_accuracy = total_train_correct / (coordinates.size(0) * (batch_index+1))
-            tqdm_dataLoader.set_description(data_type + '_loss: {:.4} lr:{:.6} lowest: {}'.format(
-                self.total_loss, optimizer.param_groups[0]['lr'],
-                self.current_loss))
+            total_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
+            self.total_accuracy = total_correct / (coordinates.size(0) * (batch_index+1))
+            tqdm_dataLoader.set_description(data_type + '_loss: {:.4} lowest: {}'.format(
+                self.total_loss, self.current_loss))
 
             if 'imu_' in data_type:
                 optimizer.zero_grad()
@@ -107,7 +105,7 @@ class IMU_PIPELINE(nn.Module):
 
         self.start_index = self.end_index
 
-        return self.total_loss
+        return self.total_loss, self.total_accuracy
 
 
 
@@ -136,8 +134,9 @@ if __name__ == "__main__":
         print('Model loaded')
 
     for epoch in tqdm(range(n_epochs), desc="epochs"):
+        pipeline.start_index = 0
         for index, subDir in enumerate(sorted(os.listdir(pipeline.var.root))):
-            train_loss, val_loss, test_loss = 0.0, 0.0, 0.0
+            loss, accuracy = 0.0, 0.0
 
             if 'imu_' in subDir:
                 pipeline.train()
@@ -147,10 +146,10 @@ if __name__ == "__main__":
                 if epoch == 0 and 'del' in arg:
                     _ = os.system('rm -rf runs/' + pipeline.tensorboard_folder)
 
-                train_loss = pipeline.engine('imu_', optimizer)
+                loss, accuracy = pipeline.engine('imu_', optimizer)
 
-                if (train_loss < pipeline.current_loss):
-                    pipeline.current_loss = train_loss
+                if (loss < pipeline.current_loss):
+                    pipeline.current_loss = loss
                     torch.save({
                                 'epoch': epoch,
                                 'model_state_dict': pipeline.state_dict(),
@@ -161,10 +160,11 @@ if __name__ == "__main__":
 
                 pipeline.eval()
                 tb = SummaryWriter('runs/' + pipeline.tensorboard_folder)
-                tb.add_scalar("Loss", train_loss, epoch)
+                tb.add_scalar("Loss", loss, epoch)
+                tb.add_scalar("Accuracy", accuracy, epoch)
                 tb.close()
 
-            if 'val_' in subDir:
+            if 'val_' in subDir or 'test_' in subDir:
                 pipeline.eval()
                 with torch.no_grad():
                     subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
@@ -172,23 +172,11 @@ if __name__ == "__main__":
                     if epoch == 0 and 'del' in arg:
                         _ = os.system('rm -rf runs/' + pipeline.tensorboard_folder)
 
-                    val_loss = pipeline.engine('val_')
+                    loss, accuracy = pipeline.engine('val_')
 
                     tb = SummaryWriter('runs/' + pipeline.tensorboard_folder)
-                    tb.add_scalar("Loss", val_loss, epoch)
-                    tb.close()
-
-            if 'test_' in subDir:
-                pipeline.eval()
-                with torch.no_grad():
-                    subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
-                    os.chdir(pipeline.var.root + subDir)
-                    if epoch == 0 and 'del' in arg:
-                        _ = os.system('rm -rf runs/' + pipeline.tensorboard_folder)
-
-                    test_loss = pipeline.engine('test_')
-                    tb = SummaryWriter('runs/' + pipeline.tensorboard_folder)
-                    tb.add_scalar("Loss", test_loss, epoch)
+                    tb.add_scalar("Loss", loss, epoch)
+                    tb.add_scalar("Accuracy", accuracy, epoch)
                     tb.close()
 
         if epoch % 5 == 0:
@@ -196,6 +184,6 @@ if __name__ == "__main__":
                         'epoch': epoch,
                         'model_state_dict': pipeline.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
-                        'loss': current_loss
+                        'loss': pipeline.current_loss
                         }, pipeline.var.root + model_checkpoint)
             print('Model saved')

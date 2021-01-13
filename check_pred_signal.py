@@ -62,20 +62,20 @@ if __name__ == "__main__":
                 sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
                 # print(sliced_gaze_dataset[0])
 
-                if not Path(pipeline.var.root + 'signal_' + subDir[4:-1] + '_predictions.pt').is_file():
-                    unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
-                    unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
-                    tqdm_valLoader = tqdm(unified_dataloader)
-                    for batch_index, (imu_data, gaze_data) in enumerate(tqdm_valLoader):
-                        gaze_data = torch.sum(gaze_data, axis=1) / 4.0
-                        coordinates = pipeline(imu_data.float()).to(device)
-
-                        if batch_index == 0:
-                            catList = coordinates
-                        else:
-                            catList = torch.cat((catList, coordinates), axis=0)
-
-                    torch.save(catList, 'signal_' + subDir[:-1] + '_predictions.pt')
+                # if not Path(pipeline.var.root + 'signal_' + subDir[4:-1] + '_predictions.pt').is_file():
+                #     unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
+                #     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
+                #     tqdm_valLoader = tqdm(unified_dataloader)
+                #     for batch_index, (imu_data, gaze_data) in enumerate(tqdm_valLoader):
+                #         gaze_data = torch.sum(gaze_data, axis=1) / 4.0
+                #         coordinates = pipeline(imu_data.float()).to(device)
+                #
+                #         if batch_index == 0:
+                #             catList = coordinates
+                #         else:
+                #             catList = torch.cat((catList, coordinates), axis=0)
+                #
+                #     torch.save(catList, 'signal_' + subDir[:-1] + '_predictions.pt')
 
             start_index = end_index
 
@@ -97,11 +97,11 @@ if __name__ == "__main__":
     # coordinate = coordinate.detach().cpu().numpy()
     # print(len(coordinate), len(sliced_gaze_dataset))
 
-    fourcc = cv2.VideoWriter_fourcc(*'MP4V')
-    out = cv2.VideoWriter('signal_output.mp4',fourcc, fps, (frame.shape[1],frame.shape[0]))
+    # fourcc = cv2.VideoWriter_fourcc(*'MP4V')
+    # out = cv2.VideoWriter('signal_output.mp4',fourcc, fps, (frame.shape[1],frame.shape[0]))
     # frame_count = 0
     # df_gaze = df_gaze.T
-    for i in range(0):
+    for i in range(frame_count-2):
         if ret == True:
             cv2.namedWindow('image', cv2.WINDOW_NORMAL)
             cv2.resizeWindow('image', 512, 512)
@@ -119,10 +119,12 @@ if __name__ == "__main__":
             #         frame = cv2.circle(frame, (int(x*frame.shape[1]),int(y*frame.shape[0])), radius=5, color=(0, 0, 255), thickness=5)
             #     except Exception as e:
             #         print(e)
-            frame = cv2.circle(frame, (int(gt_gaze_pts[0]*frame.shape[1]),int(gt_gaze_pts[1]*frame.shape[0])), radius=5, color=(0, 0, 255), thickness=5)
+            check_pt = mod_gt_gaze_pts - 0.03
+            # frame = cv2.circle(frame, (int(gt_gaze_pts[0]*frame.shape[1]),int(gt_gaze_pts[1]*frame.shape[0])), radius=5, color=(0, 0, 255), thickness=5)
             frame = cv2.circle(frame, (int(mod_gt_gaze_pts[0]*frame.shape[1]),int(mod_gt_gaze_pts[1]*frame.shape[0])), radius=5, color=(0, 255, 0), thickness=5)
+            frame = cv2.circle(frame, (int(check_pt[0]*frame.shape[1]) ,int(check_pt[1]*frame.shape[0])), radius=5, color=(0, 0, 255), thickness=5)
             cv2.imshow('image', frame)
-            out.write(frame)
+            # out.write(frame)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break

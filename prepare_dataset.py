@@ -36,9 +36,7 @@ class UNIFIED_DATASET(Dataset):
                     checkedLast = True
             else:
                 break
-        return self.transforms(self.frame_data[index]).to(self.device), torch.from_numpy(np.concatenate((self.imu_data[index], self.imu_data[index+1]), axis=0)).to(self.device), torch.from_numpy(self.gaze_data[index]).to(self.device)
-        #return self.transforms(self.frame_data[index]).to(self.device), torch.from_numpy(np.concatenate((self.imu_data[index], self.imu_data[index+1]), axis=0)).to(self.device), torch.from_numpy(np.concatenate((self.gaze_data[index], self.gaze_data[index+1]), axis=0)).to(self.device)
-
+        return self.transforms(self.frame_data[index]).to(self.device), torch.from_numpy(np.concatenate((self.imu_data[index], self.imu_data[index+1]), axis=0)).to(self.device), torch.from_numpy(self.gaze_data[index]*1000.0).to(self.device)
 
 class IMU_GAZE_FRAME_DATASET:
     def __init__(self, root, frame_size, trim_size, distribution='S'):

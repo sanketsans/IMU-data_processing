@@ -14,6 +14,8 @@ from variables import RootVariables
 class VIS_ENCODER(nn.Module):
     def __init__(self, args, checkpoint_path, device, input_channels=6, batch_norm=False):
         super(VIS_ENCODER, self).__init__()
+
+        self.var = RootVariables()
         torch.manual_seed(1)
         self.device = device
         self.net = FlowNetS.FlowNetS(args, input_channels, batch_norm)
@@ -22,9 +24,13 @@ class VIS_ENCODER(nn.Module):
         self.net = nn.Sequential(*list(self.net.children())[0:9]).to(self.device)
         for i in range(len(self.net) - 1):
             self.net[i][1] = nn.ReLU()
+
         self.fc1 = nn.Linear(1024*4*4, 4096).to(self.device)
-        self.fc2 = nn.Linear(4096, 1024).to(self.device)
+        self.fc2 = nn.Linear(4096, 256).to(self.device)
+        self.fc3 = nn.Linear(256, 2).to(self.device)
         self.dropout = nn.Dropout(0.2)
+        self.activation = nn.Sigmoid()
+        # self.net[8][1] = nn.ReLU(inplace=False)
         self.net[8] = self.net[8][0]
 
         for params in self.net.parameters():
@@ -33,8 +39,9 @@ class VIS_ENCODER(nn.Module):
     def forward(self, input_img):
         out = self.net(input_img)
         out = out.reshape(-1, 1024*4*4)
-        # out = F.relu(self.droput(self.fc1(out)))
-        # out = F.relu(self.fc2(out))
+        out = F.relu(self.dropout(self.fc1(out)))
+        out = F.relu(self.dropout(self.fc2(out)))
+        # out = self.activation(self.fc3(out))
 
         return out
 
@@ -53,6 +60,11 @@ if __name__ == "__main__":
     ## load model without batch norm
     checkpoint_path = var.root + "FlowNet2-S_checkpoint.pth.tar"
 
-    img_enc = VIS_ENCODER(args, checkpoint_path, device)
-    print(img_enc)
+    model = VIS_ENCODER(args, checkpoint_path, device)
+    imuCheckpoint_file = 'hidden_256_55e_vision_pipeline_checkpoint.pth'
+    imuCheckpoint = torch.load(var.root + imuCheckpoint_file)
+    model.load_state_dict(imuCheckpoint['model_state_dict'])
+    net = nn.Sequential(*list(model.children())[0:3])
+    print(net)
+    # print(img_enc)
     # output = img_enc.run_model(imgs)
