@@ -52,7 +52,7 @@ class IMU_PIPELINE(nn.Module):
 
         self.loss_fn = nn.SmoothL1Loss()
         self.tensorboard_folder = 'batch_64_Signal_outputs/'
-        self.total_loss, self.current_loss, self.total_accuracy = 0.0, 10000.0, 0.0
+        self.total_loss, self.current_loss, self.total_accuracy, self.total_correct = 0.0, 10000.0, 0.0, 0
         self.uni_imu_dataset, self.uni_gaze_dataset = None, None
         self.sliced_imu_dataset, self.sliced_gaze_dataset = None, None
         self.unified_dataset = None
@@ -77,7 +77,7 @@ class IMU_PIPELINE(nn.Module):
         return out*1000.0
 
     def engine(self, data_type='imu_', optimizer=None):
-        self.total_loss, self.total_accuracy = 0.0, 0.0
+        self.total_loss, self.total_accuracy, self.total_correct = 0.0, 0.0, 0
         capture = cv2.VideoCapture('scenevideo.mp4')
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         self.end_index = self.start_index + frame_count - self.trim_frame_size*2
@@ -93,8 +93,8 @@ class IMU_PIPELINE(nn.Module):
             coordinates = self.forward(imu_data.float()).to(self.device)
             loss = self.loss_fn(coordinates, gaze_data.float())
             self.total_loss += loss.item()
-            total_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
-            self.total_accuracy = total_correct / (coordinates.size(0) * (batch_index+1))
+            self.total_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
+            self.total_accuracy = self.total_correct / (coordinates.size(0) * (batch_index+1))
             tqdm_dataLoader.set_description(data_type + '_loss: {:.4} lowest: {}'.format(
                 self.total_loss, self.current_loss))
 
@@ -123,7 +123,7 @@ if __name__ == "__main__":
     pipeline.uni_imu_dataset = uni_dataset.imu_datasets      ## will already be standarized
     pipeline.uni_gaze_dataset = uni_dataset.gaze_datasets
 
-    optimizer = optim.Adam(pipeline.parameters(), lr=1e-5)
+    optimizer = optim.Adam(pipeline.parameters(), lr=1e-4)
     print(pipeline)
 
     if Path(pipeline.var.root + model_checkpoint).is_file():

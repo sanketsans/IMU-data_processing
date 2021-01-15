@@ -46,16 +46,20 @@ class IMU_GAZE_FRAME_DATASET:
         self.imu_datasets, self.gaze_datasets = None, None
         if Path(self.root + 'imuExtracted_data_' + str(trim_size) + '.pt').is_file():
             print('Files exists')
-            self.imu_datasets = torch.load('imuExtracted_data_' + str(trim_size) + '.pt')
-            self.gaze_datasets = torch.load('gazeExtracted_data_' + str(trim_size) + '.pt')
+            self.imu_datasets = np.load(self.imu_datasets, self.root + 'imuExtracted_data_' + str(trim_size) + '.npy')
+            self.gaze_datasets = np.load(self.gaze_datasets, self.root + 'gazeExtracted_data_' + str(trim_size) + '.npy')
+            # self.imu_datasets = torch.load('imuExtracted_data_' + str(trim_size) + '.pt')
+            # self.gaze_datasets = torch.load('gazeExtracted_data_' + str(trim_size) + '.pt')
         else:
             print('saved files does not exis')
             self.imu_datasets = self.dataset.load_unified_imu_dataset()
             self.gaze_datasets = self.dataset.load_unified_gaze_dataset()
             self.imu_datasets = torch.from_numpy(self.imu_datasets)
             self.gaze_datasets = torch.from_numpy(self.gaze_datasets)
-            torch.save(self.imu_datasets, self.root + 'imuExtracted_data_' + str(trim_size) + '.pt')
-            torch.save(self.gaze_datasets, self.root + 'gazeExtracted_data_' + str(trim_size) + '.pt')
+            np.save(self.imu_datasets, self.root + 'imuExtracted_data_' + str(trim_size) + '.npy')
+            np.save(self.gaze_datasets, self.root + 'gazeExtracted_data_' + str(trim_size) + '.npy')
+            # torch.save(self.imu_datasets, self.root + 'imuExtracted_data_' + str(trim_size) + '.pt')
+            # torch.save(self.gaze_datasets, self.root + 'gazeExtracted_data_' + str(trim_size) + '.pt')
 
         self.frame_datasets = self.dataset.load_unified_frame_dataset()
 
@@ -79,11 +83,13 @@ if __name__ =="__main__":
     var = RootVariables()
     device = torch.device("cpu")
     trim_size = 150
-    datasets = IMU_GAZE_FRAME_DATASET(var.root, 150, trim_size)
+    frame_size = 256
+    datasets = IMU_GAZE_FRAME_DATASET(var.root, frame_size, trim_size)
     uni_imu_dataset = datasets.imu_datasets
     uni_gaze_dataset = datasets.gaze_datasets
     folders_num, start_index = 0, 0
     utls = Helpers()
+    sliced_imu_dataset, sliced_gaze_dataset = None, None
     for index, subDir in enumerate(sorted(os.listdir(var.root))):
         if 'imu_' in subDir:
             folders_num += 1
@@ -96,10 +102,10 @@ if __name__ =="__main__":
             sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
             sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
 
-            print(len(sliced_imu_dataset), len(sliced_gaze_dataset))
-            print(sliced_imu_dataset[:,0][:,0].shape, )
-            print(utls.get_sample_rate(sliced_imu_dataset[:,0][:,0]))
+            start_index = end_index
+        if 'imu_CoffeeVendingMachine_S2' in subDir :
             break
 
-        if folders_num >0 :
-            break
+    print(sliced_imu_dataset[0], sliced_gaze_dataset[0])
+    print('\n')
+    print(sliced_imu_dataset[-1], sliced_gaze_dataset[-1])

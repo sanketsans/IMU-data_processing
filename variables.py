@@ -24,7 +24,7 @@ class RootVariables:
         self.frame_size = 256
         self.imu_input_size = 6
         self.frame_input_channel = 6
-        self.batch_size = 8
+        self.batch_size = 64
         self.hidden_size = 128
         self.num_classes = 256
         self.num_layers = 2

@@ -28,11 +28,11 @@ class VISION_PIPELINE(nn.Module):
         dict = torch.load(checkpoint_path)
         self.net.load_state_dict(dict["state_dict"])
         self.net = nn.Sequential(*list(self.net.children())[0:9]).to(self.device)
-        # for i in range(len(self.net) - 1):
-        #     self.net[i][1] = nn.ReLU()
+        for i in range(len(self.net) - 1):
+            self.net[i][1] = nn.ReLU()
         self.fc1 = nn.Linear(1024*4*4, 4096).to(self.device)
-        self.fc2 = nn.Linear(4096, 2048).to(self.device)
-        self.fc3 = nn.Linear(2048, 2).to(self.device)
+        self.fc2 = nn.Linear(4096, 256).to(self.device)
+        self.fc3 = nn.Linear(256, 2).to(self.device)
         self.dropout = nn.Dropout(0.2)
         self.activation = nn.Sigmoid()
         # self.net[8][1] = nn.ReLU(inplace=False)
@@ -42,8 +42,8 @@ class VISION_PIPELINE(nn.Module):
             params.requires_grad = True
 
         self.loss_fn = nn.SmoothL1Loss()
-        self.tensorboard_folder = 'batch_64_Vision_outputs/'
-        self.total_loss, self.current_loss, self.total_accuracy = 0.0, 10000.0, 0.0
+        self.tensorboard_folder = 'b8_hidden_256_Vision_outputs/'
+        self.total_loss, self.current_loss, self.total_accuracy, self.total_correct = 0.0, 10000.0, 0.0, 0
         self.uni_frame_dataset, self.uni_gaze_dataset = None, None
         self.sliced_frame_dataset, self.sliced_gaze_dataset = None, None
         self.unified_dataset = None
@@ -52,6 +52,9 @@ class VISION_PIPELINE(nn.Module):
     def prepare_dataset(self):
         self.unified_dataset = IMU_GAZE_FRAME_DATASET(self.var.root, self.var.frame_size, self.trim_frame_size)
         return self.unified_dataset
+
+    def get_num_correct(self, pred, label):
+        return (torch.abs(pred - label) <= 30.0).all(axis=1).sum().item()
 
     def forward(self, input_img):
         out = self.net(input_img)
@@ -63,7 +66,7 @@ class VISION_PIPELINE(nn.Module):
         return out*1000.0
 
     def engine(self, data_type='imu_', optimizer=None):
-        self.total_loss, self.total_accuracy = 0.0, 0.0
+        self.total_loss, self.total_accuracy, self.total_correct = 0.0, 0.0, 0
         capture = cv2.VideoCapture('scenevideo.mp4')
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         self.end_index = self.start_index + frame_count - self.trim_frame_size*2
@@ -79,8 +82,8 @@ class VISION_PIPELINE(nn.Module):
             coordinates = self.forward(frame_data).to(device)
             loss = self.loss_fn(coordinates, gaze_data.float())
             self.total_loss += loss.item()
-            total_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
-            self.total_accuracy = total_correct / (coordinates.size(0) * (batch_index+1))
+            self.total_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
+            self.total_accuracy = self.total_correct / (coordinates.size(0) * (batch_index+1))
             tqdm_dataLoader.set_description(data_type + '_loss: {:.4} lowest: {}'.format(
                 self.total_loss, self.current_loss))
 
@@ -102,9 +105,6 @@ class VISION_DATASET(Dataset):
 
     def __len__(self):
         return len(self.gaze_data) -1
-
-    def get_num_correct(self, pred, label):
-        return (np.abs(pred - label) < 0.04).all(axis=1).mean()
 
     def __getitem__(self, index):
         checkedLast = False

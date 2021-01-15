@@ -35,12 +35,16 @@ class FusionPipeline(nn.Module):
         self.imuModel = IMU_ENCODER(self.var.imu_input_size, self.device)
         imuCheckpoint = torch.load(self.var.root + self.imuCheckpoint_file)
         self.imuModel.load_state_dict(imuCheckpoint['model_state_dict'])
+        for params in self.imuModel.parameters():
+            params.requires_grad = False
 
         ## FRAME MODELS
         self.args = args
         self.frameModel =  VIS_ENCODER(self.args, self.checkpoint_path, self.device)
         frameCheckpoint = torch.load(self.var.root + self.frameCheckpoint_file)
         self.frameModel.load_state_dict(frameCheckpoint['model_state_dict'])
+        for params in self.frameModel.parameters():
+            params.requires_grad = False
 
         ## TEMPORAL MODELS
         self.temporalModel = IMU_ENCODER(self.temporalSize, self.device)
@@ -62,7 +66,7 @@ class FusionPipeline(nn.Module):
         self.uni_imu_dataset, self.uni_gaze_dataset = None, None
         self.sliced_imu_dataset, self.sliced_gaze_dataset, self.sliced_frame_dataset = None, None, None
         self.unified_dataset = None
-        self.start_index, self.end_index, self.total_accuracy = 0, 0, 0.0
+        self.start_index, self.end_index, self.total_accuracy, self.total_correct = 0, 0, 0.0, 0
 
     def prepare_dataset(self):
         return IMU_GAZE_FRAME_DATASET(self.var.root, self.var.frame_size, self.trim_frame_size)
@@ -87,7 +91,6 @@ class FusionPipeline(nn.Module):
         return self.imu_encoder_params, self.frame_encoder_params
 
     def fusion_network(self, imu_params, frame_params):
-        print(frame_params.shape, imu_params.shape)
         sv = self.activation(self.fusionLayer_sv(torch.cat((frame_params, imu_params), dim=1))).to(self.device)
         si = self.activation(self.fusionLayer_si(torch.cat((frame_params, imu_params), dim=1))).to(self.device)
 
@@ -114,16 +117,18 @@ class FusionPipeline(nn.Module):
         return coordinate*1000.0
 
     def get_num_correct(self, pred, label):
-        return (torch.abs(pred - label) < 30.0).all(axis=1).mean()
+        return (torch.abs(pred - label) <= 30.0).all(axis=1).sum().item()
 
     def engine(self, data_type='imu_', optimizer=None):
-        self.total_loss, self.total_accuracy = 0.0, 0.0
+        self.total_loss, self.total_accuracy, self.total_correct = 0.0, 0.0, 0
         capture = cv2.VideoCapture('scenevideo.mp4')
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         self.end_index = self.start_index + frame_count - self.trim_frame_size*2
 
-        self.sliced_imu_dataset = self.uni_imu_dataset[self.start_index: self.end_index].detach().cpu().numpy()
-        self.sliced_gaze_dataset = self.uni_gaze_dataset[self.start_index: self.end_index].detach().cpu().numpy()
+        self.sliced_imu_dataset = self.uni_imu_dataset[self.start_index: self.end_index]
+        self.sliced_gaze_dataset = self.uni_gaze_dataset[self.start_index: self.end_index]
+        # self.sliced_imu_dataset = self.uni_imu_dataset[self.start_index: self.end_index].detach().cpu().numpy()
+        # self.sliced_gaze_dataset = self.uni_gaze_dataset[self.start_index: self.end_index].detach().cpu().numpy()
         self.sliced_frame_dataset = np.load(str(self.var.frame_size) + '_framesExtracted_data_' + str(self.trim_frame_size) + '.npy', mmap_mode='r')
 
         self.unified_dataset = UNIFIED_DATASET(self.sliced_frame_dataset, self.sliced_imu_dataset, self.sliced_gaze_dataset, self.device)
@@ -133,11 +138,10 @@ class FusionPipeline(nn.Module):
         for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_dataLoader):
             gaze_data = (torch.sum(gaze_data, axis=1) / 4.0)
             coordinates = self.forward(frame_data, imu_data).to(self.device)
-            print(coordinates)
             loss = self.loss_fn(coordinates, gaze_data.float())
             self.total_loss += loss.item()
-            # total_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
-            # self.total_accuracy = total_correct / (coordinates.size(0) * (batch_index+1))
+            self.total_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
+            self.total_accuracy = self.total_correct / (coordinates.size(0) * (batch_index+1))
             tqdm_dataLoader.set_description(data_type + '_loss: {:.4} lowest: {}'.format(
                 self.total_loss, self.current_loss))
 

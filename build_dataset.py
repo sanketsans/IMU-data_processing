@@ -33,9 +33,9 @@ class BUILDING_DATASETS:
     def standarization(self, datas):
         datas = datas.reshape(-1, datas.shape[-1])
         rows, cols = datas.shape
-        for i in range(3, cols):
-            mean = torch.mean(datas[:,i])
-            std = torch.std(datas[:,i])
+        for i in range(cols):
+            mean = np.mean(datas[:,i])
+            std = np.std(datas[:,i])
             datas[:,i] = (datas[:,i] - mean) / std
 
         return datas
@@ -43,9 +43,9 @@ class BUILDING_DATASETS:
     def normalization(self, datas):
         datas = datas.reshape(-1, datas.shape[-1])
         rows, cols = datas.shape
-        for i in range(cols - 3):
-            max = torch.max(datas[:,i])
-            min = torch.min(datas[:,i])
+        for i in range(cols):
+            max = np.max(datas[:,i])
+            min = np.min(datas[:,i])
             datas[:,i] = (datas[:,i] - min ) / (max - min)
         return datas
 
