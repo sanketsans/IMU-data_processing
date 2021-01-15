@@ -82,8 +82,8 @@ class IMU_PIPELINE(nn.Module):
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         self.end_index = self.start_index + frame_count - self.trim_frame_size*2
 
-        self.sliced_imu_dataset = self.uni_imu_dataset[self.start_index: self.end_index].detach().cpu().numpy()
-        self.sliced_gaze_dataset = self.uni_gaze_dataset[self.start_index: self.end_index].detach().cpu().numpy()
+        self.sliced_imu_dataset = self.uni_imu_dataset[self.start_index: self.end_index]
+        self.sliced_gaze_dataset = self.uni_gaze_dataset[self.start_index: self.end_index]
         self.unified_dataset = IMU_DATASET(self.sliced_imu_dataset, self.sliced_gaze_dataset, self.device)
 
         unified_dataloader = torch.utils.data.DataLoader(self.unified_dataset, batch_size=self.var.batch_size, num_workers=0, drop_last=True)

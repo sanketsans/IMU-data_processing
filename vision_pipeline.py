@@ -72,7 +72,7 @@ class VISION_PIPELINE(nn.Module):
         self.end_index = self.start_index + frame_count - self.trim_frame_size*2
 
         self.sliced_frame_dataset = np.load(str(self.var.frame_size) + '_framesExtracted_data_' + str(self.trim_frame_size) + '.npy', mmap_mode='r')
-        self.sliced_gaze_dataset = self.uni_gaze_dataset[self.start_index: self.end_index].detach().cpu().numpy()
+        self.sliced_gaze_dataset = self.uni_gaze_dataset[self.start_index: self.end_index]
         self.unified_dataset = VISION_DATASET(self.sliced_frame_dataset, self.sliced_gaze_dataset, self.device)
 
         unified_dataloader = torch.utils.data.DataLoader(self.unified_dataset, batch_size=self.var.batch_size, num_workers=0, drop_last=True)
