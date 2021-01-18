@@ -32,42 +32,43 @@ if __name__ == "__main__":
     pipeline.eval()
     sliced_imu_dataset, sliced_gaze_dataset, sliced_frame_dataset = None, None, None
     catList = None
-    for index, subDir in enumerate(sorted(os.listdir(pipeline.var.root))):
-        pipeline.init_stage()
-        if 'imu_' in subDir:
-            print(subDir)
-            subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
-            os.chdir(pipeline.var.root + subDir)
-            capture = cv2.VideoCapture('scenevideo.mp4')
-            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-            end_index = start_index + frame_count - trim_frame_size*2
-            # sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
-            # sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
-            # print(sliced_gaze_dataset[0])
-            start_index = end_index
-
-        if 'test_' in subDir:
-            print(subDir)
-            subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
-            os.chdir(pipeline.var.root + subDir)
-            capture = cv2.VideoCapture('scenevideo.mp4')
-            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-            end_index = start_index + frame_count - trim_frame_size*2
-            start_index = end_index
-
-        if 'val_' in subDir:
-            print(subDir)
-            with torch.no_grad():
+    with torch.no_grad():
+        for index, subDir in enumerate(sorted(os.listdir(pipeline.var.root))):
+            pipeline.init_stage()
+            if 'imu_' in subDir:
+                print(subDir)
                 subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
                 os.chdir(pipeline.var.root + subDir)
                 capture = cv2.VideoCapture('scenevideo.mp4')
                 frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
                 end_index = start_index + frame_count - trim_frame_size*2
-                sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
-                sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
-                # print(sliced_gaze_dataset[0])
+                if 'imu_BookShelf_S1' in subDir:
+                    if not Path(pipeline.var.root + 'combined_' + subDir[4:-1] + '_predictions.pt').is_file():
+                        sliced_frame_dataset = np.load(str(256) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
+                        unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
+                        unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
+                        tqdm_valLoader = tqdm(unified_dataloader)
+                        for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_valLoader):
+                            gaze_data = torch.sum(gaze_data, axis=1) / 4.0
+                            coordinates = pipeline(frame_data, imu_data).to(device)
 
-                if not Path(pipeline.var.root + str(46) + '_predictions.pt').is_file():
+                            if batch_index == 0:
+                                catList = coordinates
+                            else:
+                                catList = torch.cat((catList, coordinates), axis=0)
+
+                        torch.save(catList, pipeline.var.root + 'combined_' + subDir[4:-1] + '_predictions.pt')
+
+                start_index = end_index
+
+            if 'test_' in subDir:
+                print(subDir)
+                subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+                os.chdir(pipeline.var.root + subDir)
+                capture = cv2.VideoCapture('scenevideo.mp4')
+                frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+                end_index = start_index + frame_count - trim_frame_size*2
+                if not Path(pipeline.var.root + 'combined_' + subDir[4:-1] + '_predictions.pt').is_file():
                     sliced_frame_dataset = np.load(str(256) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
                     unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
                     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
@@ -81,9 +82,10 @@ if __name__ == "__main__":
                         else:
                             catList = torch.cat((catList, coordinates), axis=0)
 
-                    torch.save(catList, str(index) + '_predictions.pt')
+                    torch.save(catList, pipeline.var.root + 'combined_' + subDir[4:-1] + '_predictions.pt')
 
-            start_index = end_index
+                start_index = end_index
+
 
     print(sliced_gaze_dataset[0], sliced_imu_dataset[0])
     video_file = 'scenevideo.mp4'
@@ -95,7 +97,7 @@ if __name__ == "__main__":
     ret, frame = capture.read()
     # print(frame_count, frame.shape)
     print(len(sliced_gaze_dataset), sliced_gaze_dataset.shape)
-    coordinate = torch.load(pipeline.var.root + '46_predictions.pt', map_location=torch.device('cpu'))
+    coordinate = torch.load(pipeline.var.root + 'combined_' + subDir[4:-1] + '_predictions.pt', map_location=torch.device('cpu'))
     coordinate = coordinate.detach().cpu().numpy()
     print(len(coordinate), len(sliced_gaze_dataset))
 

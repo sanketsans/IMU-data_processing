@@ -102,8 +102,8 @@ class IMU_PIPELINE(nn.Module):
             self.total_loss += loss.item()
             self.total_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
             self.total_accuracy = self.total_correct / (coordinates.size(0) * (batch_index+1))
-            tqdm_dataLoader.set_description(data_type + '_loss: {:.4} lowest: {}'.format(
-                self.total_loss, self.current_loss))
+            tqdm_dataLoader.set_description(data_type + '_loss: {:.4} accuracy: {:.3} lowest: {}'.format(
+                self.total_loss, self.total_accuracy, self.current_loss))
 
             if 'imu_' in data_type:
                 optimizer.zero_grad()
