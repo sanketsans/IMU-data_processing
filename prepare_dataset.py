@@ -71,7 +71,7 @@ class IMU_GAZE_FRAME_DATASET:
         # self.imu_datasets = self.dataset.normalization(self.imu_datasets)
 
         self.gaze_datasets = self.gaze_datasets.reshape(-1, 4, self.gaze_datasets.shape[-1])
-        # self.imu_datasets = self.imu_datasets.reshape(-1, 4, self.imu_datasets.shape[-1])
+        self.imu_datasets = self.imu_datasets.reshape(-1, 4, self.imu_datasets.shape[-1])
 
     def __len__(self):
         return int(len(self.imu_datasets))      ## number of frames corresponding to
@@ -87,7 +87,8 @@ if __name__ =="__main__":
     datasets = IMU_GAZE_FRAME_DATASET(var.root, frame_size, trim_size)
     uni_imu_dataset = datasets.imu_datasets
     uni_gaze_dataset = datasets.gaze_datasets
-    folders_num, start_index = 0, 0
+    folders_num, gaze_start_index, gaze_end_index, trim_size = 0, 0, 150
+    imu_start_index, imu_end_index = 0, 0
     utls = Helpers()
     sliced_imu_dataset, sliced_gaze_dataset = None, None
     for index, subDir in enumerate(sorted(os.listdir(var.root))):
@@ -98,16 +99,21 @@ if __name__ =="__main__":
             os.chdir(var.root + subDir)
             capture = cv2.VideoCapture('scenevideo.mp4')
             frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-            end_index = start_index + frame_count - trim_size*2
-            sliced_imu_dataset = uni_imu_dataset[start_index: end_index, 3:]
-            sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index]
-            plt.hist(sliced_imu_dataset, bins='auto')
-            plt.show()
+            gaze_end_index = gaze_start_index + frame_count - trim_size*2
+            imu_end_index = imu_start_index + frame_count
+            sliced_imu_dataset = uni_imu_dataset[imu_start_index: imu_end_index]
+            sliced_gaze_dataset = uni_gaze_dataset[gaze_start_index: gaze_end_index]
+            dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
+            print(len(dataset))
+            i, g = dataset[1]
+            print(g/1000.0)
+            print(i.shape, g.shape)
+            print(i[0], i[-1])
 
-            start_index = end_index
+            gaze_start_index = gaze_end_index
+            imu_start_index = imu_end_index
         if 'imu_CoffeeVendingMachine_S2' in subDir :
             break
 
-    print(sliced_imu_dataset[0], sliced_gaze_dataset[0])
+    print(sliced_imu_dataset[0].shape)
     print('\n')
-    print(sliced_imu_dataset[-1], sliced_gaze_dataset[-1])

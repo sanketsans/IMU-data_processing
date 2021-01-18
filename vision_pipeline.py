@@ -104,7 +104,7 @@ class VISION_DATASET(Dataset):
         self.device = device
 
     def __len__(self):
-        return len(self.gaze_data) -1
+        return len(self.gaze_data)
 
     def __getitem__(self, index):
         checkedLast = False
@@ -130,7 +130,7 @@ if __name__ == "__main__":
     flownet_checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
 
     arg = 'ag'
-    n_epochs = 1
+    n_epochs = 0
     trim_frame_size = 150
     pipeline = VISION_PIPELINE(args, flownet_checkpoint, device)
     uni_dataset = pipeline.prepare_dataset()

@@ -22,10 +22,12 @@ class IMU_DATASET(Dataset):
         self.device = device
 
     def __len__(self):
-        return len(self.imu_data) - 1
+        return len(self.gaze_data) - 1
 
     def __getitem__(self, index):
+        imu_index = 150 + index
         checkedLast = False
+        catIMUData = None
         while True:
             check = np.isnan(self.gaze_data[index])
             if check.any():
@@ -34,7 +36,15 @@ class IMU_DATASET(Dataset):
                     checkedLast = True
             else:
                 break
-        return torch.from_numpy(np.concatenate((self.imu_data[index], self.imu_data[index+1]), axis=0)).to(self.device), torch.from_numpy(self.gaze_data[index]*1000.0).to(self.device)
+
+        catIMUData = self.imu_data[imu_index-25]
+        for i in range(25):
+            catIMUData = np.concatenate((catIMUData, self.imu_data[imu_index-24+i]), axis=0)
+
+        for i in range(24):
+            catIMUData = np.concatenate((catIMUData, self.imu_data[imu_index+i]), axis=0)
+
+        return torch.from_numpy(catIMUData).to(self.device), torch.from_numpy(self.gaze_data[index]*1000.0).to(self.device)
 
 
 class IMU_PIPELINE(nn.Module):
@@ -57,7 +67,8 @@ class IMU_PIPELINE(nn.Module):
         self.uni_imu_dataset, self.uni_gaze_dataset = None, None
         self.sliced_imu_dataset, self.sliced_gaze_dataset = None, None
         self.unified_dataset = None
-        self.start_index, self.end_index = 0, 0
+        self.gaze_start_index, self.gaze_end_index = 0, 0
+        self.imu_start_index, self.imu_end_index = 0, 0
 
     def prepare_dataset(self):
         self.unified_dataset = IMU_GAZE_FRAME_DATASET(self.var.root, self.var.frame_size, self.trim_frame_size)
@@ -87,10 +98,11 @@ class IMU_PIPELINE(nn.Module):
         self.total_loss, self.total_accuracy, self.total_correct = 0.0, 0.0, 0
         capture = cv2.VideoCapture('scenevideo.mp4')
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.end_index = self.start_index + frame_count - self.trim_frame_size*2
+        self.gaze_end_index = self.imu_start_index + frame_count - self.trim_frame_size*2
+        self.imu_end_index = self.imu_start_index + frame_count
 
-        self.sliced_imu_dataset = self.uni_imu_dataset[self.start_index: self.end_index]
-        self.sliced_gaze_dataset = self.uni_gaze_dataset[self.start_index: self.end_index]
+        self.sliced_imu_dataset = self.uni_imu_dataset[self.imu_start_index: self.imu_end_index]
+        self.sliced_gaze_dataset = self.uni_gaze_dataset[self.gaze_start_index: self.gaze_end_index]
         self.unified_dataset = IMU_DATASET(self.sliced_imu_dataset, self.sliced_gaze_dataset, self.device)
 
         unified_dataloader = torch.utils.data.DataLoader(self.unified_dataset, batch_size=self.var.batch_size, num_workers=0, drop_last=True)
@@ -110,7 +122,8 @@ class IMU_PIPELINE(nn.Module):
                 loss.backward()
                 optimizer.step()
 
-        self.start_index = self.end_index
+        self.gaze_start_index = self.gaze_end_index
+        self.imu_start_index = self.imu_end_index
 
         return self.total_loss, self.total_accuracy
 
@@ -129,6 +142,7 @@ if __name__ == "__main__":
     uni_dataset = pipeline.prepare_dataset()
     pipeline.uni_imu_dataset = uni_dataset.imu_datasets      ## will already be standarized
     pipeline.uni_gaze_dataset = uni_dataset.gaze_datasets
+    print(len(pipeline.uni_imu_dataset))
 
     optimizer = optim.Adam(pipeline.parameters(), lr=1e-4)
     print(pipeline)
