@@ -63,10 +63,10 @@ class IMU_GAZE_FRAME_DATASET:
 
         self.frame_datasets = self.dataset.load_unified_frame_dataset()
 
-        if distribution == 'N':
-            self.imu_datasets = self.dataset.normalization(self.imu_datasets)
-        else:
-            self.imu_datasets = self.dataset.standarization(self.imu_datasets)
+        # if distribution == 'N':
+        #     self.imu_datasets = self.dataset.normalization(self.imu_datasets)
+        # else:
+        #     self.imu_datasets = self.dataset.standarization(self.imu_datasets)
 
         # self.imu_datasets = self.dataset.normalization(self.imu_datasets)
 
@@ -87,7 +87,8 @@ if __name__ =="__main__":
     datasets = IMU_GAZE_FRAME_DATASET(var.root, frame_size, trim_size)
     uni_imu_dataset = datasets.imu_datasets
     uni_gaze_dataset = datasets.gaze_datasets
-    folders_num, gaze_start_index, gaze_end_index, trim_size = 0, 0, 150
+    print(len(uni_imu_dataset))
+    folders_num, gaze_start_index, gaze_end_index, trim_size = 0, 0, 0, 150
     imu_start_index, imu_end_index = 0, 0
     utls = Helpers()
     sliced_imu_dataset, sliced_gaze_dataset = None, None

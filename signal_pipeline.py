@@ -25,9 +25,10 @@ class IMU_DATASET(Dataset):
         return len(self.gaze_data) - 1
 
     def __getitem__(self, index):
-        imu_index = 150 + index
+        imu_index = 75 + index
         checkedLast = False
         catIMUData = None
+        print(imu_index)
         while True:
             check = np.isnan(self.gaze_data[index])
             if check.any():
@@ -55,8 +56,8 @@ class IMU_PIPELINE(nn.Module):
         self.device = device
         self.trim_frame_size = trim_frame_size
         self.lstm = nn.LSTM(self.var.imu_input_size, self.var.hidden_size, self.var.num_layers, batch_first=True, dropout=0.2, bidirectional=True).to(self.device)
-        self.fc1 = nn.Linear(self.var.hidden_size*2, 256).to(self.device)
-        self.fc2 = nn.Linear(256, 2).to(self.device)
+        self.fc1 = nn.Linear(self.var.hidden_size*2, 2).to(self.device)
+        self.fc0 = nn.Linear(2, self.var.imu_input_size).to(self.device)
         # self.fc2 = nn.Linear(1024, 2).to(self.device)
         self.dropout = nn.Dropout(0.2)
         self.activation = nn.Sigmoid()
@@ -89,9 +90,9 @@ class IMU_PIPELINE(nn.Module):
         # h0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
         # c0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
 
+        x = F.relu(self.fc0(x))
         out, _ = self.lstm(x, (h0, c0))
-        out = F.relu(self.activatiself.fc1(out[:,-1,:]))
-        out
+        out = F.relu(self.activation(self.fc1(out[:,-1,:])))
         return out*1000.0
 
     def engine(self, data_type='imu_', optimizer=None):
@@ -146,6 +147,38 @@ if __name__ == "__main__":
 
     optimizer = optim.Adam(pipeline.parameters(), lr=1e-4)
     print(pipeline)
+    var = RootVariables()
+    folders_num, gaze_start_index, gaze_end_index, trim_size = 0, 0,0, 150
+    imu_start_index, imu_end_index = 0, 0
+    sliced_imu_dataset, sliced_gaze_dataset = None, None
+    for index, subDir in enumerate(sorted(os.listdir(var.root))):
+        if 'imu_' in subDir:
+            folders_num += 1
+            print(subDir)
+            subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+            os.chdir(var.root + subDir)
+            capture = cv2.VideoCapture('scenevideo.mp4')
+            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+            gaze_end_index = gaze_start_index + frame_count - trim_size*2
+            imu_end_index = imu_start_index + frame_count
+            sliced_imu_dataset = pipeline.uni_imu_dataset[imu_start_index: imu_end_index]
+            sliced_gaze_dataset = pipeline.uni_gaze_dataset[gaze_start_index: gaze_end_index]
+            dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
+            print(frame_count, len(dataset))
+            i, g = dataset[0]
+            print(g[0]/1000.0)
+            print(i[0], i[-1])
+            i, g = dataset[len(dataset)]
+            print(g[0]/1000.0)
+            print(i[0], i[-1])
+            # DataLoader = torch.utils.data.DataLoader(dataset, batch_size=var.batch_size, drop_last=True)
+            # for index, (i,g) in enumerate(DataLoader):
+            #     print(index)
+
+            gaze_start_index = gaze_end_index
+            imu_start_index = imu_end_index
+        if 'imu_CoffeeVendingMachine_S' in subDir :
+            break
 
     if Path(pipeline.var.root + model_checkpoint).is_file():
         checkpoint = torch.load(pipeline.var.root + model_checkpoint)
