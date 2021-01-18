@@ -54,8 +54,6 @@ class IMU_GAZE_FRAME_DATASET:
             print('saved files does not exis')
             self.imu_datasets = self.dataset.load_unified_imu_dataset()
             self.gaze_datasets = self.dataset.load_unified_gaze_dataset()
-            self.imu_datasets = (self.imu_datasets)
-            self.gaze_datasets = (self.gaze_datasets)
             np.save(self.root + 'imuExtracted_data_' + str(trim_size) + '.npy', self.imu_datasets)
             np.save(self.root + 'gazeExtracted_data_' + str(trim_size) + '.npy', self.gaze_datasets)
             # torch.save(self.imu_datasets, self.root + 'imuExtracted_data_' + str(trim_size) + '.pt')
@@ -63,10 +61,10 @@ class IMU_GAZE_FRAME_DATASET:
 
         self.frame_datasets = self.dataset.load_unified_frame_dataset()
 
-        # if distribution == 'N':
-        #     self.imu_datasets = self.dataset.normalization(self.imu_datasets)
-        # else:
-        #     self.imu_datasets = self.dataset.standarization(self.imu_datasets)
+        if distribution == 'N':
+            self.imu_datasets = self.dataset.normalization(self.imu_datasets)
+        else:
+            self.imu_datasets = self.dataset.standarization(self.imu_datasets)
 
         # self.imu_datasets = self.dataset.normalization(self.imu_datasets)
 
@@ -101,7 +99,7 @@ if __name__ =="__main__":
             capture = cv2.VideoCapture('scenevideo.mp4')
             frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
             gaze_end_index = gaze_start_index + frame_count - trim_size*2
-            imu_end_index = imu_start_index + frame_count
+            imu_end_index = imu_start_index + frame_count - trim_size
             sliced_imu_dataset = uni_imu_dataset[imu_start_index: imu_end_index]
             sliced_gaze_dataset = uni_gaze_dataset[gaze_start_index: gaze_end_index]
             dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)

@@ -138,6 +138,7 @@ class BUILDING_DATASETS:
                 self.dataset = JSON_LOADER(subDir)
                 self.dataset.POP_IMU_DATA(self.frame_count)
                 _ = os.system('rm imu_file.csv')
+                self.panda_data = {}
                 self.create_dataframes(subDir, dframe_type='imu')
 
                 if  not Path(self.root + 'imuExtracted_data_' + str(self.trim_size) + '.pt').is_file():
@@ -159,7 +160,6 @@ class BUILDING_DATASETS:
                     # self.temp[:,3] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [0]])]
                     # self.temp[:,4] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [1]])]
                     # self.temp[:,5] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [2]])]
-
 
                     if self.folders_num > 1:
                         self.new = np.concatenate((self.last, self.temp), axis=0)

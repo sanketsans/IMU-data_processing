@@ -25,10 +25,10 @@ class IMU_DATASET(Dataset):
         return len(self.gaze_data) - 1
 
     def __getitem__(self, index):
+        print(index, len(self.imu_data))
         imu_index = 75 + index
         checkedLast = False
         catIMUData = None
-        print(imu_index)
         while True:
             check = np.isnan(self.gaze_data[index])
             if check.any():
@@ -63,7 +63,7 @@ class IMU_PIPELINE(nn.Module):
         self.activation = nn.Sigmoid()
 
         self.loss_fn = nn.SmoothL1Loss()
-        self.tensorboard_folder = 'batch_64_Signal_outputs/'
+        self.tensorboard_folder = 'BLSTM_signal_outputs_2//'
         self.total_loss, self.current_loss, self.total_accuracy, self.total_correct = 0.0, 10000.0, 0.0, 0
         self.uni_imu_dataset, self.uni_gaze_dataset = None, None
         self.sliced_imu_dataset, self.sliced_gaze_dataset = None, None
@@ -99,16 +99,16 @@ class IMU_PIPELINE(nn.Module):
         self.total_loss, self.total_accuracy, self.total_correct = 0.0, 0.0, 0
         capture = cv2.VideoCapture('scenevideo.mp4')
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.gaze_end_index = self.imu_start_index + frame_count - self.trim_frame_size*2
-        self.imu_end_index = self.imu_start_index + frame_count
+        self.gaze_end_index = self.gaze_start_index + frame_count - self.trim_frame_size*2
+        self.imu_end_index = self.imu_start_index + frame_count - self.trim_frame_size
 
         self.sliced_imu_dataset = self.uni_imu_dataset[self.imu_start_index: self.imu_end_index]
         self.sliced_gaze_dataset = self.uni_gaze_dataset[self.gaze_start_index: self.gaze_end_index]
         self.unified_dataset = IMU_DATASET(self.sliced_imu_dataset, self.sliced_gaze_dataset, self.device)
-
         unified_dataloader = torch.utils.data.DataLoader(self.unified_dataset, batch_size=self.var.batch_size, num_workers=0, drop_last=True)
         tqdm_dataLoader = tqdm(unified_dataloader)
         for batch_index, (imu_data, gaze_data) in enumerate(tqdm_dataLoader):
+
             gaze_data = (torch.sum(gaze_data, axis=1) / 4.0)
             coordinates = self.forward(imu_data.float()).to(self.device)
             loss = self.loss_fn(coordinates, gaze_data.float())
@@ -128,14 +128,12 @@ class IMU_PIPELINE(nn.Module):
 
         return self.total_loss, self.total_accuracy
 
-
-
 if __name__ == "__main__":
     arg = sys.argv[1]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_checkpoint = 'signal_pipeline_checkpoint.pth'
 
-    n_epochs = 0   ## 250 done, 251 needs to start
+    n_epochs = 1   ## 250 done, 251 needs to start
     trim_frame_size = 150
 
     pipeline = IMU_PIPELINE(trim_frame_size, device)
@@ -147,39 +145,6 @@ if __name__ == "__main__":
 
     optimizer = optim.Adam(pipeline.parameters(), lr=1e-4)
     print(pipeline)
-    var = RootVariables()
-    folders_num, gaze_start_index, gaze_end_index, trim_size = 0, 0,0, 150
-    imu_start_index, imu_end_index = 0, 0
-    sliced_imu_dataset, sliced_gaze_dataset = None, None
-    for index, subDir in enumerate(sorted(os.listdir(var.root))):
-        if 'imu_' in subDir:
-            folders_num += 1
-            print(subDir)
-            subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
-            os.chdir(var.root + subDir)
-            capture = cv2.VideoCapture('scenevideo.mp4')
-            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-            gaze_end_index = gaze_start_index + frame_count - trim_size*2
-            imu_end_index = imu_start_index + frame_count
-            sliced_imu_dataset = pipeline.uni_imu_dataset[imu_start_index: imu_end_index]
-            sliced_gaze_dataset = pipeline.uni_gaze_dataset[gaze_start_index: gaze_end_index]
-            dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
-            print(frame_count, len(dataset))
-            i, g = dataset[0]
-            print(g[0]/1000.0)
-            print(i[0], i[-1])
-            i, g = dataset[len(dataset)]
-            print(g[0]/1000.0)
-            print(i[0], i[-1])
-            # DataLoader = torch.utils.data.DataLoader(dataset, batch_size=var.batch_size, drop_last=True)
-            # for index, (i,g) in enumerate(DataLoader):
-            #     print(index)
-
-            gaze_start_index = gaze_end_index
-            imu_start_index = imu_end_index
-        if 'imu_CoffeeVendingMachine_S' in subDir :
-            break
-
     if Path(pipeline.var.root + model_checkpoint).is_file():
         checkpoint = torch.load(pipeline.var.root + model_checkpoint)
         pipeline.load_state_dict(checkpoint['model_state_dict'])
@@ -193,6 +158,7 @@ if __name__ == "__main__":
             loss, accuracy = 0.0, 0.0
 
             if 'imu_' in subDir:
+                print(subDir)
                 pipeline.train()
                 # folders_num += 1
                 subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
@@ -219,6 +185,7 @@ if __name__ == "__main__":
                 tb.close()
 
             if 'val_' in subDir or 'test_' in subDir:
+                print(subDir)
                 pipeline.eval()
                 with torch.no_grad():
                     subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
@@ -226,7 +193,7 @@ if __name__ == "__main__":
                     if epoch == 0 and 'del' in arg:
                         _ = os.system('rm -rf runs/' + pipeline.tensorboard_folder)
 
-                    loss, accuracy = pipeline.engine('val_')
+                    loss, accuracy = pipeline.engine('test_')
 
                     tb = SummaryWriter('runs/' + pipeline.tensorboard_folder)
                     tb.add_scalar("Loss", loss, epoch)
