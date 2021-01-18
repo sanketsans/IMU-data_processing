@@ -71,7 +71,7 @@ class IMU_GAZE_FRAME_DATASET:
         # self.imu_datasets = self.dataset.normalization(self.imu_datasets)
 
         self.gaze_datasets = self.gaze_datasets.reshape(-1, 4, self.gaze_datasets.shape[-1])
-        self.imu_datasets = self.imu_datasets.reshape(-1, 4, self.imu_datasets.shape[-1])
+        # self.imu_datasets = self.imu_datasets.reshape(-1, 4, self.imu_datasets.shape[-1])
 
     def __len__(self):
         return int(len(self.imu_datasets))      ## number of frames corresponding to
@@ -99,8 +99,10 @@ if __name__ =="__main__":
             capture = cv2.VideoCapture('scenevideo.mp4')
             frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
             end_index = start_index + frame_count - trim_size*2
-            sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
-            sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
+            sliced_imu_dataset = uni_imu_dataset[start_index: end_index, 3:]
+            sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index]
+            plt.hist(sliced_imu_dataset, bins='auto')
+            plt.show()
 
             start_index = end_index
         if 'imu_CoffeeVendingMachine_S2' in subDir :

@@ -45,7 +45,8 @@ class IMU_PIPELINE(nn.Module):
         self.device = device
         self.trim_frame_size = trim_frame_size
         self.lstm = nn.LSTM(self.var.imu_input_size, self.var.hidden_size, self.var.num_layers, batch_first=True, dropout=0.2, bidirectional=True).to(self.device)
-        self.fc1 = nn.Linear(self.var.hidden_size*2, 2).to(self.device)
+        self.fc1 = nn.Linear(self.var.hidden_size*2, 256).to(self.device)
+        self.fc2 = nn.Linear(256, 2).to(self.device)
         # self.fc2 = nn.Linear(1024, 2).to(self.device)
         self.dropout = nn.Dropout(0.2)
         self.activation = nn.Sigmoid()
@@ -65,6 +66,11 @@ class IMU_PIPELINE(nn.Module):
     def get_num_correct(self, pred, label):
         return (torch.abs(pred - label) <= 30.0).all(axis=1).sum().item()
 
+    def init_stage(self):
+        # IMU Model
+        self.imuModel_h0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+        self.imuModel_c0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+
     def forward(self, x):
         # hidden = (h0, c0)
         h0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
@@ -73,7 +79,8 @@ class IMU_PIPELINE(nn.Module):
         # c0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
 
         out, _ = self.lstm(x, (h0, c0))
-        out = self.activation(self.fc1(out[:,-1,:]))
+        out = F.relu(self.activatiself.fc1(out[:,-1,:]))
+        out
         return out*1000.0
 
     def engine(self, data_type='imu_', optimizer=None):
@@ -114,7 +121,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_checkpoint = 'signal_pipeline_checkpoint.pth'
 
-    n_epochs = 1   ## 250 done, 251 needs to start
+    n_epochs = 0   ## 250 done, 251 needs to start
     trim_frame_size = 150
 
     pipeline = IMU_PIPELINE(trim_frame_size, device)

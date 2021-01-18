@@ -29,58 +29,65 @@ if __name__ == "__main__":
     pipeline.eval()
     sliced_imu_dataset, sliced_gaze_dataset, sliced_frame_dataset = None, None, None
     catList = None
-    for index, subDir in enumerate(sorted(os.listdir(pipeline.var.root))):
-        if 'imu_' in subDir:
-            subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
-            os.chdir(pipeline.var.root + subDir)
-            capture = cv2.VideoCapture('scenevideo.mp4')
-            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-            end_index = start_index + frame_count - trim_frame_size*2
-            sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
-            print(subDir, start_index, end_index)
-            start_index = end_index
-
-        if 'val_' in subDir:
-            print(subDir)
-            subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
-            os.chdir(pipeline.var.root + subDir)
-            capture = cv2.VideoCapture('scenevideo.mp4')
-            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-            end_index = start_index + frame_count - trim_frame_size*2
-            sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
-            start_index = end_index
-
-        if 'test_' in subDir:
-            print(subDir)
-            with torch.no_grad():
+    with torch.no_grad():
+        for index, subDir in enumerate(sorted(os.listdir(pipeline.var.root))):
+            if 'imu_' in subDir:
                 subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
                 os.chdir(pipeline.var.root + subDir)
                 capture = cv2.VideoCapture('scenevideo.mp4')
                 frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
                 end_index = start_index + frame_count - trim_frame_size*2
-                sliced_imu_dataset = uni_imu_dataset[start_index: end_index].detach().cpu().numpy()
-                sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index].detach().cpu().numpy()
-                # print(sliced_gaze_dataset[0])
+                sliced_imu_dataset = uni_imu_dataset[start_index: end_index]
+                sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index]
+                if 'imu_BookShelf_S1' in subDir:
+                    if not Path(pipeline.var.root + 'signal_' + subDir[4:-1] + '_predictions.pt').is_file():
+                        unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
+                        unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
+                        tqdm_valLoader = tqdm(unified_dataloader)
+                        for batch_index, (imu_data, gaze_data) in enumerate(tqdm_valLoader):
+                            gaze_data = torch.sum(gaze_data, axis=1) / 4.0
+                            coordinates = pipeline(imu_data.float()).to(device)
 
-                # if not Path(pipeline.var.root + 'signal_' + subDir[4:-1] + '_predictions.pt').is_file():
-                #     unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
-                #     unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
-                #     tqdm_valLoader = tqdm(unified_dataloader)
-                #     for batch_index, (imu_data, gaze_data) in enumerate(tqdm_valLoader):
-                #         gaze_data = torch.sum(gaze_data, axis=1) / 4.0
-                #         coordinates = pipeline(imu_data.float()).to(device)
-                #
-                #         if batch_index == 0:
-                #             catList = coordinates
-                #         else:
-                #             catList = torch.cat((catList, coordinates), axis=0)
-                #
-                #     torch.save(catList, 'signal_' + subDir[:-1] + '_predictions.pt')
+                            if batch_index == 0:
+                                catList = coordinates
+                            else:
+                                catList = torch.cat((catList, coordinates), axis=0)
 
-            start_index = end_index
+                        torch.save(catList, 'signal_' + subDir[4:-1] + '_predictions.pt')
 
-        if 'val_SuperMarket_S1' in subDir:
-            break
+                start_index = end_index
+
+            if 'test_' in subDir:
+                print(subDir)
+                with torch.no_grad():
+                    subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+                    os.chdir(pipeline.var.root + subDir)
+                    capture = cv2.VideoCapture('scenevideo.mp4')
+                    frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+                    end_index = start_index + frame_count - trim_frame_size*2
+                    sliced_imu_dataset = uni_imu_dataset[start_index: end_index]
+                    sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index]
+                    # print(sliced_gaze_dataset[0])
+
+                    if not Path(pipeline.var.root + 'signal_' + subDir[4:-1] + '_predictions.pt').is_file():
+                        unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, device)
+                        unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
+                        tqdm_valLoader = tqdm(unified_dataloader)
+                        for batch_index, (imu_data, gaze_data) in enumerate(tqdm_valLoader):
+                            gaze_data = torch.sum(gaze_data, axis=1) / 4.0
+                            coordinates = pipeline(imu_data.float()).to(device)
+
+                            if batch_index == 0:
+                                catList = coordinates
+                            else:
+                                catList = torch.cat((catList, coordinates), axis=0)
+
+                        torch.save(catList, 'signal_' + subDir[4:-1] + '_predictions.pt')
+
+                start_index = end_index
+
+            if 'val_SuperMarket_S1' in subDir:
+                break
 
     # print(sliced_gaze_dataset[0], sliced_imu_dataset[0])
     # sliced_gaze_dataset = uni_gaze_dataset[star]

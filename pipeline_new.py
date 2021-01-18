@@ -25,8 +25,8 @@ class FusionPipeline(nn.Module):
         self.var = RootVariables()
         self.checkpoint_path = self.var.root + checkpoint
         self.activation = nn.Sigmoid()
-        self.temporalSeq = 32
-        self.temporalSize = 8
+        self.temporalSeq = 8
+        self.temporalSize = 32
         self.trim_frame_size = trim_frame_size
         self.imuCheckpoint_file = 'hidden_256_60e_signal_pipeline_checkpoint.pth'
         self.frameCheckpoint_file = 'hidden_256_55e_vision_pipeline_checkpoint.pth'
@@ -36,7 +36,7 @@ class FusionPipeline(nn.Module):
         imuCheckpoint = torch.load(self.var.root + self.imuCheckpoint_file)
         self.imuModel.load_state_dict(imuCheckpoint['model_state_dict'])
         for params in self.imuModel.parameters():
-            params.requires_grad = False
+            params.requires_grad = True
 
         ## FRAME MODELS
         self.args = args
@@ -44,7 +44,7 @@ class FusionPipeline(nn.Module):
         frameCheckpoint = torch.load(self.var.root + self.frameCheckpoint_file)
         self.frameModel.load_state_dict(frameCheckpoint['model_state_dict'])
         for params in self.frameModel.parameters():
-            params.requires_grad = False
+            params.requires_grad = True
 
         ## TEMPORAL MODELS
         self.temporalModel = IMU_ENCODER(self.temporalSize, self.device)
@@ -99,7 +99,7 @@ class FusionPipeline(nn.Module):
         return F.relu(self.finalFusion(torch.cat((newFrames, newIMU), dim=1))).to(self.device)
 
     def temporal_modelling(self, fused_params):
-        self.fused_params = fused_params.unsqueeze(dim = 1)
+        # self.fused_params = fused_params.unsqueeze(dim = 1)
         newParams = fused_params.reshape(fused_params.shape[0], self.temporalSeq, self.temporalSize)
         tempOut = self.temporalModel(newParams.float()).to(self.device)
         regOut_1 = F.relu(self.fc1(tempOut)).to(self.device)
@@ -127,8 +127,6 @@ class FusionPipeline(nn.Module):
 
         self.sliced_imu_dataset = self.uni_imu_dataset[self.start_index: self.end_index]
         self.sliced_gaze_dataset = self.uni_gaze_dataset[self.start_index: self.end_index]
-        # self.sliced_imu_dataset = self.uni_imu_dataset[self.start_index: self.end_index].detach().cpu().numpy()
-        # self.sliced_gaze_dataset = self.uni_gaze_dataset[self.start_index: self.end_index].detach().cpu().numpy()
         self.sliced_frame_dataset = np.load(str(self.var.frame_size) + '_framesExtracted_data_' + str(self.trim_frame_size) + '.npy', mmap_mode='r')
 
         self.unified_dataset = UNIFIED_DATASET(self.sliced_frame_dataset, self.sliced_imu_dataset, self.sliced_gaze_dataset, self.device)
@@ -142,8 +140,8 @@ class FusionPipeline(nn.Module):
             self.total_loss += loss.item()
             self.total_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
             self.total_accuracy = self.total_correct / (coordinates.size(0) * (batch_index+1))
-            tqdm_dataLoader.set_description(data_type + '_loss: {:.4} lowest: {}'.format(
-                self.total_loss, self.current_loss))
+            tqdm_dataLoader.set_description(data_type + '_loss: {:.4} accuracy: {:.3} lowest: {}'.format(
+                self.total_loss, self.total_accuracy, self.current_loss))
 
             if 'imu_' in data_type:
                 optimizer.zero_grad()
@@ -175,7 +173,6 @@ if __name__ == "__main__":
 
     arg = 'del'
     n_epochs = 1
-    current_loss = 1000.0
     # optimizer = optim.Adam([
     #                         {'params': imuModel.parameters(), 'lr': 1e-4},
     #                         {'params': frameModel.parameters(), 'lr': 1e-4},
