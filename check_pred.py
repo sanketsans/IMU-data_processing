@@ -34,14 +34,16 @@ if __name__ == "__main__":
     catList = None
     with torch.no_grad():
         for index, subDir in enumerate(sorted(os.listdir(pipeline.var.root))):
-            pipeline.init_stage()
             if 'imu_' in subDir:
                 print(subDir)
                 subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
                 os.chdir(pipeline.var.root + subDir)
                 capture = cv2.VideoCapture('scenevideo.mp4')
                 frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                end_index = start_index + frame_count - trim_frame_size*2
+                gaze_end_index = gaze_start_index + frame_count - trim_frame_size*2
+                imu_end_index = imu_start_index + frame_count - trim_frame_size
+                sliced_imu_dataset = uni_imu_dataset[imu_start_index: imu_end_index]
+                sliced_gaze_dataset = uni_gaze_dataset[gaze_start_index: gaze_end_index]
                 if 'imu_BookShelf_S1' in subDir:
                     if not Path(pipeline.var.root + 'combined_' + subDir[4:-1] + '_predictions.pt').is_file():
                         sliced_frame_dataset = np.load(str(256) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
@@ -59,7 +61,10 @@ if __name__ == "__main__":
 
                         torch.save(catList, pipeline.var.root + 'combined_' + subDir[4:-1] + '_predictions.pt')
 
-                start_index = end_index
+                    break
+
+                gaze_start_index = gaze_end_index
+                imu_start_index = imu_end_index
 
             if 'test_' in subDir:
                 print(subDir)
@@ -67,7 +72,10 @@ if __name__ == "__main__":
                 os.chdir(pipeline.var.root + subDir)
                 capture = cv2.VideoCapture('scenevideo.mp4')
                 frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                end_index = start_index + frame_count - trim_frame_size*2
+                gaze_end_index = gaze_start_index + frame_count - trim_frame_size*2
+                imu_end_index = imu_start_index + frame_count - trim_frame_size
+                sliced_imu_dataset = uni_imu_dataset[imu_start_index: imu_end_index]
+                sliced_gaze_dataset = uni_gaze_dataset[gaze_start_index: gaze_end_index]
                 if not Path(pipeline.var.root + 'combined_' + subDir[4:-1] + '_predictions.pt').is_file():
                     sliced_frame_dataset = np.load(str(256) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
                     unified_dataset = UNIFIED_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset, device)
@@ -84,7 +92,8 @@ if __name__ == "__main__":
 
                     torch.save(catList, pipeline.var.root + 'combined_' + subDir[4:-1] + '_predictions.pt')
 
-                start_index = end_index
+                gaze_start_index = gaze_end_index
+                imu_start_index = imu_end_index
 
 
     print(sliced_gaze_dataset[0], sliced_imu_dataset[0])
@@ -101,11 +110,11 @@ if __name__ == "__main__":
     coordinate = coordinate.detach().cpu().numpy()
     print(len(coordinate), len(sliced_gaze_dataset))
 
-    fourcc = cv2.VideoWriter_fourcc(*'MP4V')
-    out = cv2.VideoWriter('output.mp4',fourcc, fps, (frame.shape[1],frame.shape[0]))
+    # fourcc = cv2.VideoWriter_fourcc(*'MP4V')
+    # out = cv2.VideoWriter('output.mp4',fourcc, fps, (frame.shape[1],frame.shape[0]))
     # frame_count = 0
     # df_gaze = df_gaze.T
-    for i in range(frame_count - 2):
+    for i in range(0):
         if ret == True:
             cv2.namedWindow('image', cv2.WINDOW_NORMAL)
             cv2.resizeWindow('image', 512, 512)

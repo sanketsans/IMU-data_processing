@@ -25,7 +25,6 @@ class IMU_DATASET(Dataset):
         return len(self.gaze_data) - 1
 
     def __getitem__(self, index):
-        print(index, len(self.imu_data))
         imu_index = 75 + index
         checkedLast = False
         catIMUData = None
@@ -38,12 +37,12 @@ class IMU_DATASET(Dataset):
             else:
                 break
 
-        catIMUData = self.imu_data[imu_index-25]
-        for i in range(25):
-            catIMUData = np.concatenate((catIMUData, self.imu_data[imu_index-24+i]), axis=0)
+        catIMUData = self.imu_data[imu_index-49]
+        for i in range(49):
+            catIMUData = np.concatenate((catIMUData, self.imu_data[imu_index-48+i]), axis=0)
 
-        for i in range(24):
-            catIMUData = np.concatenate((catIMUData, self.imu_data[imu_index+i]), axis=0)
+        # for i in range(24):
+        #     catIMUData = np.concatenate((catIMUData, self.imu_data[imu_index+i]), axis=0)
 
         return torch.from_numpy(catIMUData).to(self.device), torch.from_numpy(self.gaze_data[index]*1000.0).to(self.device)
 
@@ -57,19 +56,20 @@ class IMU_PIPELINE(nn.Module):
         self.trim_frame_size = trim_frame_size
         self.lstm = nn.LSTM(self.var.imu_input_size, self.var.hidden_size, self.var.num_layers, batch_first=True, dropout=0.2, bidirectional=True).to(self.device)
         self.fc1 = nn.Linear(self.var.hidden_size*2, 2).to(self.device)
-        self.fc0 = nn.Linear(2, self.var.imu_input_size).to(self.device)
+        self.fc0 = nn.Linear(6, self.var.imu_input_size).to(self.device)
         # self.fc2 = nn.Linear(1024, 2).to(self.device)
         self.dropout = nn.Dropout(0.2)
         self.activation = nn.Sigmoid()
 
-        self.loss_fn = nn.SmoothL1Loss()
-        self.tensorboard_folder = 'BLSTM_signal_outputs_2//'
+        self.loss_fn = nn.MSELoss()
+        self.tensorboard_folder = 'BLSTM_signal_outputs_3/'
         self.total_loss, self.current_loss, self.total_accuracy, self.total_correct = 0.0, 10000.0, 0.0, 0
         self.uni_imu_dataset, self.uni_gaze_dataset = None, None
         self.sliced_imu_dataset, self.sliced_gaze_dataset = None, None
         self.unified_dataset = None
         self.gaze_start_index, self.gaze_end_index = 0, 0
         self.imu_start_index, self.imu_end_index = 0, 0
+        self.num_samples = 0
 
     def prepare_dataset(self):
         self.unified_dataset = IMU_GAZE_FRAME_DATASET(self.var.root, self.var.frame_size, self.trim_frame_size)
@@ -90,12 +90,13 @@ class IMU_PIPELINE(nn.Module):
         # h0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
         # c0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
 
-        x = F.relu(self.fc0(x))
+        x = self.fc0(x)
         out, _ = self.lstm(x, (h0, c0))
-        out = F.relu(self.activation(self.fc1(out[:,-1,:])))
+        out = self.activation(self.fc1(out[:,-1,:]))
         return out*1000.0
 
     def engine(self, data_type='imu_', optimizer=None):
+        self.num_samples = 0
         self.total_loss, self.total_accuracy, self.total_correct = 0.0, 0.0, 0
         capture = cv2.VideoCapture('scenevideo.mp4')
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -105,13 +106,15 @@ class IMU_PIPELINE(nn.Module):
         self.sliced_imu_dataset = self.uni_imu_dataset[self.imu_start_index: self.imu_end_index]
         self.sliced_gaze_dataset = self.uni_gaze_dataset[self.gaze_start_index: self.gaze_end_index]
         self.unified_dataset = IMU_DATASET(self.sliced_imu_dataset, self.sliced_gaze_dataset, self.device)
-        unified_dataloader = torch.utils.data.DataLoader(self.unified_dataset, batch_size=self.var.batch_size, num_workers=0, drop_last=True)
+        unified_dataloader = torch.utils.data.DataLoader(self.unified_dataset, batch_size=self.var.batch_size, num_workers=4, drop_last=True)
         tqdm_dataLoader = tqdm(unified_dataloader)
         for batch_index, (imu_data, gaze_data) in enumerate(tqdm_dataLoader):
-
+            self.num_samples += gaze_data.size(0)
             gaze_data = (torch.sum(gaze_data, axis=1) / 4.0)
             coordinates = self.forward(imu_data.float()).to(self.device)
-            loss = self.loss_fn(coordinates, gaze_data.float())
+            x_loss = self.loss(coordinates[:,0], gaze_data[:,0].float())
+            y_loss = self.loss(coordinates[:,1], gaze_data[:,1].float())
+            loss = x_loss + y_loss
             self.total_loss += loss.item()
             self.total_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
             self.total_accuracy = self.total_correct / (coordinates.size(0) * (batch_index+1))
@@ -126,7 +129,7 @@ class IMU_PIPELINE(nn.Module):
         self.gaze_start_index = self.gaze_end_index
         self.imu_start_index = self.imu_end_index
 
-        return self.total_loss, self.total_accuracy
+        return self.total_loss / self.num_samples, self.total_accuracy
 
 if __name__ == "__main__":
     arg = sys.argv[1]
@@ -153,7 +156,7 @@ if __name__ == "__main__":
         print('Model loaded')
 
     for epoch in tqdm(range(n_epochs), desc="epochs"):
-        pipeline.start_index = 0
+        pipeline.gaze_start_index, pipeline.imu_start_index = 0, 0
         for index, subDir in enumerate(sorted(os.listdir(pipeline.var.root))):
             loss, accuracy = 0.0, 0.0
 

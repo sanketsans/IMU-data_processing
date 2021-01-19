@@ -28,8 +28,8 @@ class FusionPipeline(nn.Module):
         self.temporalSeq = 8
         self.temporalSize = 32
         self.trim_frame_size = trim_frame_size
-        self.imuCheckpoint_file = 'hidden_256_60e_signal_pipeline_checkpoint.pth'
-        self.frameCheckpoint_file = 'hidden_256_55e_vision_pipeline_checkpoint.pth'
+        self.imuCheckpoint_file = 'hidden_256_BLSTM_70e_SP.pth'
+        self.frameCheckpoint_file = 'hidden_256_relu_50e_VP.pth'
 
         ## IMU Models
         self.imuModel = IMU_ENCODER(self.var.imu_input_size, self.device)
@@ -67,6 +67,7 @@ class FusionPipeline(nn.Module):
         self.sliced_imu_dataset, self.sliced_gaze_dataset, self.sliced_frame_dataset = None, None, None
         self.unified_dataset = None
         self.start_index, self.end_index, self.total_accuracy, self.total_correct = 0, 0, 0.0, 0
+        self.num_samples = 0
 
     def prepare_dataset(self):
         return IMU_GAZE_FRAME_DATASET(self.var.root, self.var.frame_size, self.trim_frame_size)
@@ -120,6 +121,7 @@ class FusionPipeline(nn.Module):
         return (torch.abs(pred - label) <= 30.0).all(axis=1).sum().item()
 
     def engine(self, data_type='imu_', optimizer=None):
+        self.num_samples = 0
         self.total_loss, self.total_accuracy, self.total_correct = 0.0, 0.0, 0
         capture = cv2.VideoCapture('scenevideo.mp4')
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -134,6 +136,7 @@ class FusionPipeline(nn.Module):
         unified_dataloader = torch.utils.data.DataLoader(self.unified_dataset, batch_size=self.var.batch_size, num_workers=0, drop_last=True)
         tqdm_dataLoader = tqdm(unified_dataloader)
         for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_dataLoader):
+            self.num_samples += gaze_data.size(0)
             gaze_data = (torch.sum(gaze_data, axis=1) / 4.0)
             coordinates = self.forward(frame_data, imu_data).to(self.device)
             loss = self.loss_fn(coordinates, gaze_data.float())
@@ -150,7 +153,7 @@ class FusionPipeline(nn.Module):
 
         self.start_index = self.end_index
 
-        return self.total_loss, self.total_accuracy
+        return self.total_loss / self.num_samples, self.total_accuracy
 
 
 

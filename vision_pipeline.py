@@ -48,6 +48,7 @@ class VISION_PIPELINE(nn.Module):
         self.sliced_frame_dataset, self.sliced_gaze_dataset = None, None
         self.unified_dataset = None
         self.start_index, self.end_index = 0, 0
+        self.num_samples = 0
 
     def prepare_dataset(self):
         self.unified_dataset = IMU_GAZE_FRAME_DATASET(self.var.root, self.var.frame_size, self.trim_frame_size)
@@ -66,6 +67,7 @@ class VISION_PIPELINE(nn.Module):
         return out*1000.0
 
     def engine(self, data_type='imu_', optimizer=None):
+        self.num_samples = 0
         self.total_loss, self.total_accuracy, self.total_correct = 0.0, 0.0, 0
         capture = cv2.VideoCapture('scenevideo.mp4')
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -78,6 +80,7 @@ class VISION_PIPELINE(nn.Module):
         unified_dataloader = torch.utils.data.DataLoader(self.unified_dataset, batch_size=self.var.batch_size, num_workers=0, drop_last=True)
         tqdm_dataLoader = tqdm(unified_dataloader)
         for batch_index, (frame_data, gaze_data) in enumerate(tqdm_dataLoader):
+            self.num_samples += gaze_data.size(0)
             gaze_data = (torch.sum(gaze_data, axis=1) / 4.0)
             coordinates = self.forward(frame_data).to(device)
             loss = self.loss_fn(coordinates, gaze_data.float())
@@ -94,7 +97,7 @@ class VISION_PIPELINE(nn.Module):
 
         self.start_index = self.end_index
 
-        return self.total_loss, self.total_accuracy
+        return self.total_loss / self.num_samples, self.total_accuracy
 
 class VISION_DATASET(Dataset):
     def __init__(self, frame_dataset, gaze_dataset, device=None):
