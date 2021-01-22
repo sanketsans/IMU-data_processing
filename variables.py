@@ -27,6 +27,7 @@ class RootVariables:
         self.batch_size = 64
         self.hidden_size = 128
         self.num_classes = 256
+        self.trim_frame_size = 150
         self.num_layers = 2
 
 if __name__ =='__main__':

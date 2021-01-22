@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.append('../')
 from helpers import Helpers
 from variables import Variables
+import cv2
 
 class JSON_LOADER:
     def __init__(self, folder):
@@ -30,15 +31,14 @@ class JSON_LOADER:
         self.gaze_start_timestamp = float(self.var.gaze_dataList[0]['timestamp'])
         self.start_timestamp = (self.imu_start_timestamp if self.gaze_start_timestamp < self.imu_start_timestamp else self.gaze_start_timestamp) - 0.01
 
-
     def POP_GAZE_DATA(self, frame_count, return_val=False):
         ### GAZE DATA
-        nT, oT = 1.9, 1.9
-
+        nT, oT = 0.0, 0.0
         for data in self.var.gaze_dataList:
+            nT = self.utils.floor(data['timestamp'])
             try:
-                if(float(data['timestamp']) > self.start_timestamp and float(data['timestamp']) < 600.0):
-                    nT = self.utils.floor(data['timestamp'])
+                if(float(data['timestamp']) > self.start_timestamp):
+                    # nT = self.utils.floor(data['timestamp'])
                     # diff = round(nT - oT, 2)
                     if (0.0 <= float(data['data']['gaze2d'][0]) <= 1.0) and (0.0 <= float(data['data']['gaze2d'][1]) <= 1.0):
                         self.var.gaze_data[0].append(float(data['data']['gaze2d'][0]))
@@ -47,14 +47,14 @@ class JSON_LOADER:
                         self.var.gaze_data[0].append(np.nan)
                         self.var.gaze_data[1].append(np.nan)
 
-                    self.var.timestamps_gaze.append(nT)
-                    self.var.n_gaze_samples += 1
-                    oT = nT
+
             except Exception as e:
-                self.var.timestamps_gaze.append(nT)
                 self.var.gaze_data[0].append(np.nan)
                 self.var.gaze_data[1].append(np.nan)
-                oT = nT
+
+            self.var.n_gaze_samples += 1
+            self.var.timestamps_gaze.append(nT)
+            oT = nT
 
         if len(self.var.gaze_data[0])/4 < frame_count:
             for i in range(len(self.var.gaze_data[0]), frame_count*4):
@@ -64,18 +64,16 @@ class JSON_LOADER:
         if return_val:
             return self.utils.get_sample_rate(self.var.timestamps_gaze)
 
-    def POP_IMU_DATA(self, frame_count, return_val=False):
+    def POP_IMU_DATA(self, frame_count, cut_short =True, return_val=False):
         nT, oT = 0.0, 0.0
 
         for index, data in enumerate(self.var.imu_dataList):
             try:
-                if(float(data['timestamp']) > self.start_timestamp and float(data['timestamp']) < 600.00):
+                if(float(data['timestamp']) > self.start_timestamp):
                     nT = self.utils.floor(data['timestamp'])
                     diff = round((nT - oT), 2)
-                    # print(nT)
-                    # print(diff, round((nT-oT), 2))
                     self.var.imu_data_acc[0].append(float(data['data']['accelerometer'][0]))
-                    self.var.imu_data_acc[1].append(float(data['data']['accelerometer'][1]) + 9.80665)
+                    self.var.imu_data_acc[1].append(float(data['data']['accelerometer'][1]) ) # + 9.80665
                     self.var.imu_data_acc[2].append(float(data['data']['accelerometer'][2]))
 
                     self.var.imu_data_gyro[0].append(float(data['data']['gyroscope'][0]))
@@ -83,24 +81,25 @@ class JSON_LOADER:
                     self.var.imu_data_gyro[2].append(float(data['data']['gyroscope'][2]))
 
                     self.var.timestamps_imu.append(nT)
-                    if (diff <= 0.01 and self.var.check_repeat==True):
-                        self.utils.get_average_remove_dup(self.var.imu_data_acc[0], -2, -3)
-                        self.utils.get_average_remove_dup(self.var.imu_data_acc[1], -2, -3)
-                        self.utils.get_average_remove_dup(self.var.imu_data_acc[2], -2, -3)
+                    if cut_short:
+                        if (diff <= 0.01 and self.var.check_repeat==True):
+                            self.utils.get_average_remove_dup(self.var.imu_data_acc[0], -2, -3)
+                            self.utils.get_average_remove_dup(self.var.imu_data_acc[1], -2, -3)
+                            self.utils.get_average_remove_dup(self.var.imu_data_acc[2], -2, -3)
 
-                        self.utils.get_average_remove_dup(self.var.imu_data_gyro[0], -2, -3)
-                        self.utils.get_average_remove_dup(self.var.imu_data_gyro[1], -2, -3)
-                        self.utils.get_average_remove_dup(self.var.imu_data_gyro[2], -2, -3)
+                            self.utils.get_average_remove_dup(self.var.imu_data_gyro[0], -2, -3)
+                            self.utils.get_average_remove_dup(self.var.imu_data_gyro[1], -2, -3)
+                            self.utils.get_average_remove_dup(self.var.imu_data_gyro[2], -2, -3)
 
-                        self.var.timestamps_imu.pop(len(self.var.timestamps_imu) - 3)
-                        # print('Mid point resolved')
+                            self.var.timestamps_imu.pop(len(self.var.timestamps_imu) - 3)
+                            # print('Mid point resolved')
 
-                        self.var.n_imu_samples -= 1
-                        self.var.check_repeat = False
-                    elif (diff < 0.01):
-                        self.var.check_repeat = True
-                    else:
-                        pass
+                            self.var.n_imu_samples -= 1
+                            self.var.check_repeat = False
+                        elif (diff < 0.01):
+                            self.var.check_repeat = True
+                        else:
+                            pass
                     self.var.n_imu_samples += 1
                     oT = nT
             except Exception as e:
@@ -125,8 +124,11 @@ if __name__ == "__main__":
     dataset_folder = '/home/sans/Downloads/gaze_data/'
 
     os.chdir(dataset_folder + folder)
+    capture = cv2.VideoCapture('scenevideo.mp4')
+    frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
     dataset = JSON_LOADER(folder)
-    print(dataset.POP_IMU_DATA(1500, True))
+    print(dataset.POP_GAZE_DATA(frame_count, return_val=True))
+    print(dataset.POP_IMU_DATA(frame_count, cut_short=True, return_val=True))
 # print(utils.get_sample_rate(var.timestamps_imu), len(var.timestamps_imu))
 # print(utils.get_sample_rate(var.timestamps_gaze), len(var.timestamps_gaze))
 # plt.subplot(221)
