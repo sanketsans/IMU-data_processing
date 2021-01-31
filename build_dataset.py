@@ -68,6 +68,11 @@ class BUILDING_DATASETS:
         self.panda_data = {}
         self.create_dataframes(subDir, 'gaze')
         self.gaze_arr = np.array(self.dataset.var.gaze_data).transpose()
+#         temp = np.zeros((len(self.gaze_arr) , 6))
+# #         print(len(self.imu_arr_acc), len(temp))
+#         temp[:,0] = self.gaze_arr[:, 0]
+#         temp[:,1] = self.gaze_arr[:,1]
+
         temp = np.zeros((self.frame_count*4-self.trim_size*4*2, 2))
         temp[:,0] = self.gaze_arr[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [0]])]
         temp[:,1] = self.gaze_arr[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [1]])]
@@ -157,22 +162,25 @@ class BUILDING_DATASETS:
         # _ = os.system('rm folder_imuExtracted_data_' + str(self.trim_size) + '.pt')
         self.imu_arr_acc = np.array(self.dataset.var.imu_data_acc).transpose()
         self.imu_arr_gyro = np.array(self.dataset.var.imu_data_gyro).transpose()
-        # temp = np.zeros((len(self.imu_arr_acc) , 6))
-        # print(len(self.imu_arr_acc), len(temp))
-        # temp[:,0] = self.imu_arr_acc[:, 0]
-        # temp[:,1] = self.imu_arr_acc[:,1]
-        # temp[:,2] = self.imu_arr_acc[:,2]
-        # temp[:,3] = self.imu_arr_gyro[:,0]
-        # temp[:,4] = self.imu_arr_gyro[:,1]
-        # temp[:,5] = self.imu_arr_gyro[:,2]
+        temp = np.zeros((len(self.imu_arr_acc) , 6))
+#         print(len(self.imu_arr_acc), len(temp))
+#         temp[:,0] = self.imu_arr_acc[:, 0]
+#         temp[:,1] = self.imu_arr_acc[:,1]
+#         temp[:,2] = self.imu_arr_acc[:,2]
+#         temp[:,3] = self.imu_arr_gyro[:,0]
+#         temp[:,4] = self.imu_arr_gyro[:,1]
+#         temp[:,5] = self.imu_arr_gyro[:,2]
+#         temp = np.zeros((self.frame_count*4 - self.trim_size*4*2 + 4*24, 6))
+#         temp[:,0] = self.imu_arr_acc[tuple([np.arange(self.trim_size*4 - 4*9, self.frame_count*4 - self.trim_size*4 + 4*15), [0]])]
         temp = np.zeros((self.frame_count*4 - self.trim_size*4, 6))
         temp[:,0] = self.imu_arr_acc[tuple([np.arange(self.trim_size*2, self.frame_count*4 - self.trim_size*2), [0]])]
-        temp[:,1] = self.imu_arr_acc[tuple([np.arange(self.trim_size*2, self.frame_count*4- self.trim_size*2), [1]])]
-        temp[:,2] = self.imu_arr_acc[tuple([np.arange(self.trim_size*2, self.frame_count*4- self.trim_size*2), [2]])]
-        temp[:,3] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*2, self.frame_count*4- self.trim_size*2), [0]])]
-        temp[:,4] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*2, self.frame_count*4- self.trim_size*2), [1]])]
-        temp[:,5] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*2, self.frame_count*4- self.trim_size*2), [2]])]
-        # # temp = np.zeros((self.frame_count*4-self.trim_size*4*2, 6))
+        temp[:,0] = self.imu_arr_acc[tuple([np.arange(self.trim_size*2 , self.frame_count*4 - self.trim_size*2 ), [0]])]
+        temp[:,1] = self.imu_arr_acc[tuple([np.arange(self.trim_size*2 , self.frame_count*4- self.trim_size*2 ), [1]])]
+        temp[:,2] = self.imu_arr_acc[tuple([np.arange(self.trim_size*2 , self.frame_count*4- self.trim_size*2 ), [2]])]
+        temp[:,3] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*2 , self.frame_count*4- self.trim_size*2 ), [0]])]
+        temp[:,4] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*2 , self.frame_count*4- self.trim_size*2 ), [1]])]
+        temp[:,5] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*2 , self.frame_count*4- self.trim_size*2 ), [2]])]
+        # temp = np.zeros((self.frame_count*4-self.trim_size*4*2, 6))
         # temp[:,0] = self.imu_arr_acc[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [0]])]
         # temp[:,1] = self.imu_arr_acc[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [1]])]
         # temp[:,2] = self.imu_arr_acc[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [2]])]
@@ -236,7 +244,7 @@ if __name__ == "__main__":
     # os.chdir(dataset_folder)
     dataframes = BUILDING_DATASETS(var.root, 256, 150)
 
-    # gaze_datas = dataframes.load_unified_gaze_dataset()
+    gaze_datas = dataframes.load_unified_gaze_dataset()
     imu_datas = dataframes.load_unified_imu_dataset()
     print(len(imu_datas))
     # imu_datas= dataframes.load_unified_imu_dataset()

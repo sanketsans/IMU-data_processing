@@ -33,6 +33,7 @@ class JSON_LOADER:
 
     def POP_GAZE_DATA(self, frame_count, return_val=False):
         ### GAZE DATA
+        check = False
         nT, oT = 0.0, 0.0
         for data in self.var.gaze_dataList:
             nT = self.utils.floor(data['timestamp'])
@@ -44,9 +45,9 @@ class JSON_LOADER:
                         self.var.gaze_data[0].append(float(data['data']['gaze2d'][0]))
                         self.var.gaze_data[1].append(float(data['data']['gaze2d'][1]))
                     else:
+                        check = True
                         self.var.gaze_data[0].append(np.nan)
                         self.var.gaze_data[1].append(np.nan)
-
 
             except Exception as e:
                 self.var.gaze_data[0].append(np.nan)
@@ -60,6 +61,9 @@ class JSON_LOADER:
             for i in range(len(self.var.gaze_data[0]), frame_count*4):
                 self.var.gaze_data[0].append(np.nan)
                 self.var.gaze_data[1].append(np.nan)
+
+        if check:
+            print('NAN VALUES')
 
         if return_val:
             return self.utils.get_sample_rate(self.var.timestamps_gaze)
@@ -128,7 +132,7 @@ if __name__ == "__main__":
     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
     dataset = JSON_LOADER(folder)
     print(dataset.POP_GAZE_DATA(frame_count, return_val=True))
-    print(dataset.POP_IMU_DATA(frame_count, cut_short=True, return_val=True))
+    # print(dataset.POP_IMU_DATA(frame_count, cut_short=True, return_val=True))
 # print(utils.get_sample_rate(var.timestamps_imu), len(var.timestamps_imu))
 # print(utils.get_sample_rate(var.timestamps_gaze), len(var.timestamps_gaze))
 # plt.subplot(221)

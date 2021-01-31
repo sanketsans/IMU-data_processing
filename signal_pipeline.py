@@ -37,13 +37,13 @@ class IMU_DATASET(Dataset):
             else:
                 break
 
-        catIMUData = self.imu_data[imu_index-9]
-        for i in range(9):
-            catIMUData = np.concatenate((catIMUData, self.imu_data[imu_index-8+i]), axis=0)
+        catIMUData = self.imu_data[imu_index-2]
+        for i in range(2):
+            catIMUData = np.concatenate((catIMUData, self.imu_data[imu_index-1+i]), axis=0)
+        for i in range(3):
+            catIMUData = np.concatenate((catIMUData, self.imu_data[imu_index+i]), axis=0)
 
-        # for i in range(24):
-        #     catIMUData = np.concatenate((catIMUData, self.imu_data[imu_index+i]), axis=0)
-        return torch.from_numpy(catList).to(self.device), torch.from_numpy(self.gaze_data[index]).to(self.device)
+        return torch.from_numpy(catIMUData).to(self.device), torch.from_numpy(self.gaze_data[index]).to(self.device)
         # return torch.from_numpy(np.concatenate((self.imu_data[imu_index-1], self.imu_data[imu_index]), axis=0)).to(self.device), torch.from_numpy(self.gaze_data[index]).to(self.device)
 
 
@@ -54,9 +54,8 @@ class IMU_PIPELINE(nn.Module):
         self.var = RootVariables()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.lstm = nn.LSTM(self.var.imu_input_size, self.var.hidden_size, self.var.num_layers, batch_first=True, dropout=0.25, bidirectional=True).to(self.device)
-        self.fc1 = nn.Linear(self.var.hidden_size*2, 2).to(self.device)
         self.fc0 = nn.Linear(6, self.var.imu_input_size).to(self.device)
-        # self.fc2 = nn.Linear(1024, 2).to(self.device)
+        self.fc1 = nn.Linear(self.var.hidden_size*2, 2).to(self.device)
         self.dropout = nn.Dropout(0.2)
         self.activation = nn.Sigmoid()
 
@@ -75,7 +74,7 @@ class IMU_PIPELINE(nn.Module):
         self.num_samples = 0
 
     def get_num_correct(self, pred, label):
-        return torch.logical_and((torch.abs(pred[:,0]*1080-label[:,0]*1080) <= 35.0), (torch.abs(pred[:,1]*1920-label[:,1]*1920) <= 60.0)).sum().item()
+        return torch.logical_and((torch.abs(pred[:,0]*1920-label[:,0]*1920) <= 35.0), (torch.abs(pred[:,1]*1080-label[:,1]*1080) <= 60.0)).sum().item()
 
     def forward(self, x):
         h0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
@@ -83,7 +82,7 @@ class IMU_PIPELINE(nn.Module):
         # h0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
         # c0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
 
-        x = self.fc0(x)
+        x = F.relu(self.fc0(x))
         out, _ = self.lstm(x, (h0, c0))
         out = self.activation(self.fc1(out[:,-1,:]))
         return out
@@ -92,19 +91,21 @@ class IMU_PIPELINE(nn.Module):
         self.num_samples = 0
         self.total_loss, self.total_accuracy, self.total_correct = 0.0, 0.0, 0
 
+
         self.unified_dataset = IMU_DATASET(sliced_imu_dataset, sliced_gaze_dataset, self.device)
         unified_dataloader = torch.utils.data.DataLoader(self.unified_dataset, batch_size=self.var.batch_size, num_workers=4, drop_last=True)
         tqdm_dataLoader = tqdm(unified_dataloader)
         for batch_index, (imu_data, gaze_data) in enumerate(tqdm_dataLoader):
             self.num_samples += gaze_data.size(0)
-            gaze_data = (torch.sum(gaze_data, axis=1) / 4.0)
+            gaze_data = gaze_data[:,0,:]
+            # gaze_data = (torch.sum(gaze_data, axis=1) / 4.0)
             coordinates = self.forward(imu_data.float()).to(self.device)
-            loss = self.loss_fn(coordinates, gaze_data.float())
+            loss = self.loss_fn(coordinates*1000.0, (gaze_data*1000.0).float())
             self.total_loss += loss.item()
             self.total_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
             self.total_accuracy = self.total_correct / (coordinates.size(0) * (batch_index+1))
             tqdm_dataLoader.set_description(data_type + '_loss: {:.4} accuracy: {:.3} lowest: {}'.format(
-                self.total_loss, self.total_accuracy, self.current_loss))
+                self.total_loss / self.num_samples, 100.0*self.total_accuracy, self.current_loss))
 
             if 'train_' in data_type:
                 optimizer.zero_grad()
@@ -121,12 +122,10 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_checkpoint = 'signal_pipeline_checkpoint.pth'
 
-    n_epochs = 0   ## 250 done, 251 needs to start
+    n_epochs = 1   ## 250 done, 251 needs to start
+    toggle = 0
 
     pipeline = IMU_PIPELINE()
-    pipeline.dataset = pipeline.prepare_dataset()
-    pipeline.train_imu_dataset, pipeline.test_imu_dataset = dataset.imu_train_datasets, dataset.imu_test_datasets
-    pipeline.train_gaze_dataset, pipeline.test_gaze_dataset = dataset.gaze_train_datasets, dataset.gaze_test_datasets
 
     optimizer = optim.Adam(pipeline.parameters(), lr=1e-4)
     print(pipeline)
@@ -137,13 +136,19 @@ if __name__ == "__main__":
         pipeline.current_loss = checkpoint['loss']
         print('Model loaded')
 
+    os.chdir(pipeline.var.root)
+
+
     for epoch in tqdm(range(n_epochs), desc="epochs"):
         pipeline.gaze_start_index, pipeline.imu_start_index = 0, 0
         for index, subDir in enumerate(sorted(os.listdir(pipeline.var.root))):
             loss, accuracy = 0.0, 0.0
 
             if 'train_' in subDir:
-                print(subDir)
+                if toggle != 1:
+                    toggle = 1
+                    pipeline.gaze_start_index, pipeline.imu_start_index = 0, 0
+
                 pipeline.train()
                 # folders_num += 1
                 subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
@@ -157,10 +162,10 @@ if __name__ == "__main__":
                 sliced_gaze_dataset = pipeline.train_gaze_dataset[pipeline.gaze_start_index: pipeline.gaze_end_index]
 
                 if epoch == 0 and 'del' in arg:
-                    _ = os.system('mv runs new_backup')
+                    # _ = os.system('mv runs new_backup')
                     _ = os.system('rm -rf runs/' + pipeline.tensorboard_folder)
 
-                loss, accuracy = pipeline.engine('train_', optimizer)
+                loss, accuracy = pipeline.engine(sliced_imu_dataset, sliced_gaze_dataset, 'train_', optimizer)
 
                 if (loss < pipeline.current_loss):
                     pipeline.current_loss = loss
@@ -179,9 +184,12 @@ if __name__ == "__main__":
                 tb.close()
 
             if 'val_' in subDir or 'test_' in subDir:
-                print(subDir)
                 pipeline.eval()
                 with torch.no_grad():
+                    if toggle != -1:
+                        toggle = -1
+                        pipeline.gaze_start_index, pipeline.imu_start_index = 0, 0
+
                     subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
                     os.chdir(pipeline.var.root + subDir)
                     capture = cv2.VideoCapture('scenevideo.mp4')
@@ -193,17 +201,15 @@ if __name__ == "__main__":
                     sliced_gaze_dataset = pipeline.test_gaze_dataset[pipeline.gaze_start_index: pipeline.gaze_end_index]
 
                     if epoch == 0 and 'del' in arg:
-                        _ = os.system('mv runs new_backup')
+                        # _ = os.system('mv runs new_backup')
                         _ = os.system('rm -rf runs/' + pipeline.tensorboard_folder)
 
-                    loss, accuracy = pipeline.engine('test_')
+                    loss, accuracy = pipeline.engine(sliced_imu_dataset, sliced_gaze_dataset, 'test_')
 
                     tb = SummaryWriter('runs/' + pipeline.tensorboard_folder)
                     tb.add_scalar("Loss", loss, epoch)
                     tb.add_scalar("Accuracy", accuracy, epoch)
                     tb.close()
-
-                pipeline.gaze_start_index, pipeline.imu_start_index = 0, 0
 
         if epoch % 5 == 0:
             torch.save({

@@ -47,12 +47,10 @@ class VISION_PIPELINE(nn.Module):
         self.uni_frame_dataset, self.uni_gaze_dataset = None, None
         self.sliced_frame_dataset, self.sliced_gaze_dataset = None, None
         self.unified_dataset = None
+        self.dataset = IMU_GAZE_FRAME_DATASET(self.var.root, self.var.frame_size, self.trim_frame_size)
+        self.train_gaze_dataset, self.test_gaze_dataset = self.dataset.gaze_train_datasets, self.dataset.gaze_test_datasets
         self.start_index, self.end_index = 0, 0
         self.num_samples = 0
-
-    def prepare_dataset(self):
-        self.unified_dataset = IMU_GAZE_FRAME_DATASET(self.var.root, self.var.frame_size, self.trim_frame_size)
-        return self.unified_dataset
 
     def get_num_correct(self, pred, label):
         return (torch.abs(pred - label) <= 30.0).all(axis=1).sum().item()
@@ -136,8 +134,6 @@ if __name__ == "__main__":
     n_epochs = 0
     trim_frame_size = 150
     pipeline = VISION_PIPELINE(args, flownet_checkpoint, device)
-    uni_dataset = pipeline.prepare_dataset()
-    pipeline.uni_gaze_dataset = uni_dataset.gaze_datasets
 
     optimizer = optim.Adam(pipeline.parameters(), lr=1e-4)
 
