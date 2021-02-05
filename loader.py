@@ -33,7 +33,6 @@ class JSON_LOADER:
 
     def POP_GAZE_DATA(self, frame_count, return_val=False):
         ### GAZE DATA
-        check = False
         nT, oT = 0.0, 0.0
         for data in self.var.gaze_dataList:
             nT = self.utils.floor(data['timestamp'])
@@ -45,7 +44,6 @@ class JSON_LOADER:
                         self.var.gaze_data[0].append(float(data['data']['gaze2d'][0]))
                         self.var.gaze_data[1].append(float(data['data']['gaze2d'][1]))
                     else:
-                        check = True
                         self.var.gaze_data[0].append(np.nan)
                         self.var.gaze_data[1].append(np.nan)
 
@@ -61,9 +59,6 @@ class JSON_LOADER:
             for i in range(len(self.var.gaze_data[0]), frame_count*4):
                 self.var.gaze_data[0].append(np.nan)
                 self.var.gaze_data[1].append(np.nan)
-
-        if check:
-            print('NAN VALUES')
 
         if return_val:
             return self.utils.get_sample_rate(self.var.timestamps_gaze)

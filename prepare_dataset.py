@@ -62,12 +62,12 @@ class IMU_GAZE_FRAME_DATASET:
 
         self.frame_datasets = self.dataset.load_unified_frame_dataset()
 
-        if distribution == 'N':
-            self.imu_train_datasets = self.dataset.normalization(self.imu_train_datasets)
-            self.imu_test_datasets = self.dataset.normalization(self.imu_test_datasets)
-        else:
-            self.imu_train_datasets = self.dataset.standarization(self.imu_train_datasets)
-            self.imu_test_datasets = self.dataset.standarization(self.imu_test_datasets)
+#         if distribution == 'N':
+#             self.imu_train_datasets = self.dataset.normalization(self.imu_train_datasets)
+#             self.imu_test_datasets = self.dataset.normalization(self.imu_test_datasets)
+#         else:
+#             self.imu_train_datasets = self.dataset.standarization(self.imu_train_datasets)
+#             self.imu_test_datasets = self.dataset.standarization(self.imu_test_datasets)
 
         self.gaze_train_datasets = self.gaze_train_datasets.reshape(-1, 4, self.gaze_train_datasets.shape[-1])
         self.imu_train_datasets = self.imu_train_datasets.reshape(-1, 4, self.imu_train_datasets.shape[-1])
@@ -76,7 +76,7 @@ class IMU_GAZE_FRAME_DATASET:
         self.imu_test_datasets = self.imu_test_datasets.reshape(-1, 4, self.imu_test_datasets.shape[-1])
 
     def __len__(self):
-        return int(len(self.imu_datasets))      ## number of frames corresponding to
+        return int(len(self.gaze_train_datasets))      ## number of frames corresponding to
 
     # def __getitem__(self, index):
     #     return self.imu_datasets[index], self.gaze_datasets[index]

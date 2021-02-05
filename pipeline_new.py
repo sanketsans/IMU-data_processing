@@ -13,6 +13,7 @@ from tqdm import tqdm
 from encoder_imu import IMU_ENCODER
 from encoder_vis import VIS_ENCODER
 from prepare_dataset import IMU_GAZE_FRAME_DATASET, UNIFIED_DATASET
+from helpers import Helpers
 # from getDataset import FRAME_IMU_DATASET
 from variables import RootVariables
 from torch.utils.tensorboard import SummaryWriter
@@ -26,10 +27,10 @@ class FusionPipeline(nn.Module):
         self.checkpoint_path = self.var.root + checkpoint
         self.activation = nn.Sigmoid()
         self.temporalSeq = 8
-        self.temporalSize = 32
+        self.temporalSize = 8
         self.trim_frame_size = trim_frame_size
-        self.imuCheckpoint_file = 'hidden_256_BLSTM_70e_SP.pth'
-        self.frameCheckpoint_file = 'hidden_256_relu_50e_VP.pth'
+        self.imuCheckpoint_file = 'signal_pipeline_checkpoint.pth'
+        self.frameCheckpoint_file = 'vision_pipeline_checkpoint.pth'
 
         ## IMU Models
         self.imuModel = IMU_ENCODER(self.var.imu_input_size, self.device)
@@ -49,40 +50,19 @@ class FusionPipeline(nn.Module):
         ## TEMPORAL MODELS
         self.temporalModel = IMU_ENCODER(self.temporalSize, self.device)
 
-        self.fc1 = nn.Linear(self.var.hidden_size*2, 128).to(self.device)
+        self.downsample_fc = nn.Linear(256, self.var.hidden_size*2)
+        self.fc1 = nn.Linear(self.var.hidden_size*2, 2).to(self.device)
         self.droput = nn.Dropout(0.3)
-        self.fc2 = nn.Linear(128, 2).to(self.device)
-        self.fusionLayer_sv = nn.Linear(512, 256).to(self.device)
-        self.fusionLayer_si = nn.Linear(512, 256).to(self.device)
-        self.finalFusion = nn.Linear(512, 256).to(self.device)
+        # self.fc2 = nn.Linear(128, 2).to(self.device)
+        # self.fusionLayer_sv = nn.Linear(512, 256).to(self.device)
+        # self.fusionLayer_si = nn.Linear(512, 256).to(self.device)
+        # self.finalFusion = nn.Linear(512, 256).to(self.device)
 
         ##OTHER
         self.imu_encoder_params = None
         self.frame_encoder_params = None
 
-        self.loss_fn = nn.SmoothL1Loss()
         self.tensorboard_folder = 'batch_64_Signal_outputs/'
-        self.total_loss, self.current_loss = 0.0, 10000.0
-        self.uni_imu_dataset, self.uni_gaze_dataset = None, None
-        self.sliced_imu_dataset, self.sliced_gaze_dataset, self.sliced_frame_dataset = None, None, None
-        self.unified_dataset = None
-        self.start_index, self.end_index, self.total_accuracy, self.total_correct = 0, 0, 0.0, 0
-        self.num_samples = 0
-
-    def prepare_dataset(self):
-        return IMU_GAZE_FRAME_DATASET(self.var.root, self.var.frame_size, self.trim_frame_size)
-
-    # def get_sigmoid_mask(self, params):
-    #     return self.activation(params)
-
-    def init_stage(self):
-        # IMU Model
-        self.imuModel_h0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
-        self.imuModel_c0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
-
-        # Temp Model
-        self.tempModel_h0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
-        self.tempModel_c0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
 
     def get_encoder_params(self, imu_BatchData, frame_BatchData):
         self.imu_encoder_params = self.imuModel(imu_BatchData.float()).to(self.device)
@@ -92,19 +72,23 @@ class FusionPipeline(nn.Module):
         return self.imu_encoder_params, self.frame_encoder_params
 
     def fusion_network(self, imu_params, frame_params):
-        sv = self.activation(self.fusionLayer_sv(torch.cat((frame_params, imu_params), dim=1))).to(self.device)
-        si = self.activation(self.fusionLayer_si(torch.cat((frame_params, imu_params), dim=1))).to(self.device)
+        downsample_frame_params = F.relu(self.downsample_fc(frame_params))
+        return torch.cat((downsample_frame_params, imu_params), dim=1).to(self.device)
 
-        newIMU = imu_params * sv
-        newFrames = frame_params * si
-        return F.relu(self.finalFusion(torch.cat((newFrames, newIMU), dim=1))).to(self.device)
+        # sv = self.activation(self.fusionLayer_sv(torch.cat((frame_params, imu_params), dim=1))).to(self.device)
+        # si = self.activation(self.fusionLayer_si(torch.cat((frame_params, imu_params), dim=1))).to(self.device)
+        #
+        # newIMU = imu_params * sv
+        # newFrames = frame_params * si
+        # return F.relu(self.finalFusion(torch.cat((newFrames, newIMU), dim=1))).to(self.device)
 
     def temporal_modelling(self, fused_params):
         # self.fused_params = fused_params.unsqueeze(dim = 1)
         newParams = fused_params.reshape(fused_params.shape[0], self.temporalSeq, self.temporalSize)
         tempOut = self.temporalModel(newParams.float()).to(self.device)
-        regOut_1 = F.relu(self.fc1(tempOut)).to(self.device)
-        gaze_pred = self.activation(self.droput(self.fc2(regOut_1))).to(self.device)
+        gaze_pred = self.activation(self.fc1(tempOut)).to(self.device)
+        # regOut_1 = F.relu(self.fc1(tempOut)).to(self.device)
+        # gaze_pred = self.activation(self.droput(self.fc2(regOut_1))).to(self.device)
 
         #self.tempModel_h0, self.tempModel_c0 = h0.detach(), c0.detach()
 
@@ -118,44 +102,21 @@ class FusionPipeline(nn.Module):
         return coordinate*1000.0
 
     def get_num_correct(self, pred, label):
-        return (torch.abs(pred - label) <= 30.0).all(axis=1).sum().item()
+        return torch.logical_and((torch.abs(pred[:,0]*1920-label[:,0]*1920) <= 100.0), (torch.abs(pred[:,1]*1080-label[:,1]*1080) <= 100.0)).sum().item()
 
-    def engine(self, data_type='imu_', optimizer=None):
-        self.num_samples = 0
-        self.total_loss, self.total_accuracy, self.total_correct = 0.0, 0.0, 0
-        capture = cv2.VideoCapture('scenevideo.mp4')
-        frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.end_index = self.start_index + frame_count - self.trim_frame_size*2
+class FINAL_DATASET(Dataset):
+    def __init__(self, frame_feat, imu_feat, labels):
+        self.frame_feat = frame_feat
+        self.imu_feat = imu_feat
+        self.label = labels
+        self.transforms = transforms.Compose([transforms.ToTensor()])
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.sliced_imu_dataset = self.uni_imu_dataset[self.start_index: self.end_index]
-        self.sliced_gaze_dataset = self.uni_gaze_dataset[self.start_index: self.end_index]
-        self.sliced_frame_dataset = np.load(str(self.var.frame_size) + '_framesExtracted_data_' + str(self.trim_frame_size) + '.npy', mmap_mode='r')
+    def __len__(self):
+        return len(self.label)
 
-        self.unified_dataset = UNIFIED_DATASET(self.sliced_frame_dataset, self.sliced_imu_dataset, self.sliced_gaze_dataset, self.device)
-
-        unified_dataloader = torch.utils.data.DataLoader(self.unified_dataset, batch_size=self.var.batch_size, num_workers=0, drop_last=True)
-        tqdm_dataLoader = tqdm(unified_dataloader)
-        for batch_index, (frame_data, imu_data, gaze_data) in enumerate(tqdm_dataLoader):
-            self.num_samples += gaze_data.size(0)
-            gaze_data = (torch.sum(gaze_data, axis=1) / 4.0)
-            coordinates = self.forward(frame_data, imu_data).to(self.device)
-            loss = self.loss_fn(coordinates, gaze_data.float())
-            self.total_loss += loss.item()
-            self.total_correct += pipeline.get_num_correct(coordinates, gaze_data.float())
-            self.total_accuracy = self.total_correct / (coordinates.size(0) * (batch_index+1))
-            tqdm_dataLoader.set_description(data_type + '_loss: {:.4} accuracy: {:.3} lowest: {}'.format(
-                self.total_loss, self.total_accuracy, self.current_loss))
-
-            if 'imu_' in data_type:
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-
-        self.start_index = self.end_index
-
-        return self.total_loss / self.num_samples, self.total_accuracy
-
-
+    def __getitem__(self, index):
+        return self.transforms(self.feat[index]).to(self.device), torch.from_numpy(self.imu_feat[index]).to(self.device), torch.from_numpy(self.label[index]).to(self.device)
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -163,85 +124,95 @@ if __name__ == "__main__":
     parser.add_argument('--fp16', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
     parser.add_argument("--rgb_max", type=float, default=255.)
     args = parser.parse_args()
+    utils = Helpers()
 
     model_checkpoint = 'pipeline_checkpoint.pth'
     flownet_checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
     trim_frame_size = 150
-    # current_loss_mean_train, current_loss_mean_val, current_loss_mean_test = 0.0, 0.0,  0.0
-    pipeline = FusionPipeline(args, flownet_checkpoint, trim_frame_size, device)
-
-    uni_dataset = pipeline.prepare_dataset()
-    pipeline.uni_imu_dataset = uni_dataset.imu_datasets      ## will already be standarized
-    pipeline.uni_gaze_dataset = uni_dataset.gaze_datasets
-
     arg = 'del'
     n_epochs = 1
-    # optimizer = optim.Adam([
-    #                         {'params': imuModel.parameters(), 'lr': 1e-4},
-    #                         {'params': frameModel.parameters(), 'lr': 1e-4},
-    #                         {'params': temporalModel.parameters(), 'lr': 1e-4}
-    #                         ], lr=1e-3)
+    # current_loss_mean_train, current_loss_mean_val, current_loss_mean_test = 0.0, 0.0,  0.0
+    pipeline = FusionPipeline(args, flownet_checkpoint, trim_frame_size, device)
     optimizer = optim.Adam(pipeline.parameters(), lr=1e-4)
-
+    criterion = nn.L1Loss()
+    print(pipeline)
     if Path(pipeline.var.root + model_checkpoint).is_file():
         checkpoint = torch.load(pipeline.var.root + model_checkpoint)
         pipeline.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        pipeline.current_loss = checkpoint['loss']
+        # pipeline.current_loss = checkpoint['loss']
         print('Model loaded')
 
+    frame_training_feat, frame_testing_feat, imu_training_feat, imu_testing_feat, training_target, testing_target = utils.load_datasets()
+
+    os.chdir(pipeline.var.root)
+    imu_training_feat = pipeline.normalization(imu_training_feat)
+    imu_testing_feat = pipeline.normalization(imu_testing_feat)
 
     for epoch in tqdm(range(n_epochs), desc="epochs"):
-        pipeline.start_index = 0
-        for index, subDir in enumerate(sorted(os.listdir(pipeline.var.root))):
-            loss, accuracy = 0.0, 0.0
-            #pipeline.init_stage()
-            if 'imu_' in subDir:
-                pipeline.train()
-                # folders_num += 1
-                subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
-                os.chdir(pipeline.var.root + subDir)
-                if epoch == 0 and 'del' in arg:
-                    _ = os.system('rm -rf runs/' + pipeline.tensorboard_folder)
+        trainDataset = FINAL_DATASET(frame_training_feat, imu_training_feat, training_target)
+        trainLoader = torch.utils.data.DataLoader(trainDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=4)
+        tqdm_trainLoader = tqdm(trainLoader)
+        testDataset = FINAL_DATASET(frame_testing_feat, imu_testing_feat, testing_target)
+        testLoader = torch.utils.data.DataLoader(testDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=4)
+        tqdm_testLoader = tqdm(testLoader)
 
-                loss, accuracy = pipeline.engine('imu_', optimizer)
+        num_samples = 0
+        total_loss, total_correct, total_accuracy = 0.0, 0.0, 0.0
+        pipeline.train()
+        for batch_index, (frame_feat, imu_feat, labels) in enumerate(tqdm_trainLoader):
+            num_samples += feat.size(0)
+            labels = labels[:,0,:]
+            pred = pipeline(frame_feat, imu_feat).to(device)
+            loss = criterion(pred*1000.0, (labels*1000.0).float())
+            total_loss += loss.item()
+            total_correct += pipeline.get_num_correct(pred, labels.float())
+            total_accuracy = total_correct / num_samples
+            tqdm_trainLoader.set_description('training: ' + '_loss: {:.4} correct: {} accuracy: {:.3}'.format(
+                total_loss / num_samples, total_correct, 100.0*total_accuracy))
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-                if (loss < pipeline.current_loss):
-                    pipeline.current_loss = loss
-                    torch.save({
-                                'epoch': epoch,
-                                'model_state_dict': pipeline.state_dict(),
-                                'optimizer_state_dict': optimizer.state_dict(),
-                                'loss': pipeline.current_loss
-                                }, pipeline.var.root + model_checkpoint)
-                    print('Model saved')
+        if epoch == 0 and 'del' in arg:
+            # _ = os.system('mv runs new_backup')
+            _ = os.system('rm -rf runs/' + pipeline.tensorboard_folder)
 
-                pipeline.eval()
-                tb = SummaryWriter('runs/' + pipeline.tensorboard_folder)
-                tb.add_scalar("Loss", loss, epoch)
-                tb.add_scalar("Accuracy", accuracy, epoch)
-                tb.close()
+        tb = SummaryWriter('runs/' + pipeline.tensorboard_folder)
+        tb.add_scalar("Train Loss", total_loss / num_samples, epoch)
+        tb.add_scalar("Training Correct", total_correct, epoch)
+        tb.add_scalar("Train Accuracy", total_accuracy, epoch)
 
-            if 'val_' in subDir or 'test_' in subDir:
-                pipeline.eval()
-                with torch.no_grad():
-                    subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
-                    os.chdir(pipeline.var.root + subDir)
-                    if epoch == 0 and 'del' in arg:
-                        _ = os.system('rm -rf runs/' + pipeline.tensorboard_folder)
+        pipeline.eval()
+        with torch.no_grad():
+            num_samples = 0
+            total_loss, total_correct, total_accuracy = 0.0, 0.0, 0.0
+            for batch_index, (frame_feat, imu_feat, labels) in enumerate(tqdm_testLoader):
+                num_samples += feat.size(0)
+                labels = labels[:,0,:]
+                pred = pipeline(frame_feat, imu_feat).to(device)
+                loss = criterion(pred*1000.0, (labels*1000.0).float())
+                total_loss += loss.item()
+                total_correct += pipeline.get_num_correct(pred, labels.float())
+                total_accuracy = total_correct / num_samples
+                tqdm_testLoader.set_description('testing: ' + '_loss: {:.4} correct: {} accuracy: {:.3}'.format(
+                    total_loss / num_samples, total_correct, 100.0*total_accuracy))
 
-                    loss, accuracy = pipeline.engine('val_')
-
-                    tb = SummaryWriter('runs/' + pipeline.tensorboard_folder)
-                    tb.add_scalar("Loss", loss, epoch)
-                    tb.add_scalar("Accuracy", accuracy, epoch)
-                    tb.close()
+        tb.add_scalar("Testing Loss", total_loss / num_samples, epoch)
+        tb.add_scalar("Testing Correct", total_correct, epoch)
+        tb.add_scalar("Testing Accuracy", total_accuracy, epoch)
+        tb.close()
 
         if epoch % 5 == 0:
             torch.save({
                         'epoch': epoch,
                         'model_state_dict': pipeline.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
-                        'loss': pipeline.current_loss
                         }, pipeline.var.root + model_checkpoint)
             print('Model saved')
+
+    # optimizer = optim.Adam([
+    #                         {'params': imuModel.parameters(), 'lr': 1e-4},
+    #                         {'params': frameModel.parameters(), 'lr': 1e-4},
+    #                         {'params': temporalModel.parameters(), 'lr': 1e-4}
+    #                         ], lr=1e-3)

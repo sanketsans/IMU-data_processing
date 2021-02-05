@@ -172,21 +172,21 @@ class BUILDING_DATASETS:
 #         temp[:,5] = self.imu_arr_gyro[:,2]
 #         temp = np.zeros((self.frame_count*4 - self.trim_size*4*2 + 4*24, 6))
 #         temp[:,0] = self.imu_arr_acc[tuple([np.arange(self.trim_size*4 - 4*9, self.frame_count*4 - self.trim_size*4 + 4*15), [0]])]
-        temp = np.zeros((self.frame_count*4 - self.trim_size*4, 6))
+        # temp = np.zeros((self.frame_count*4 - self.trim_size*4, 6))
+        # temp[:,0] = self.imu_arr_acc[tuple([np.arange(self.trim_size*2, self.frame_count*4 - self.trim_size*2), [0]])]
+        # temp[:,0] = self.imu_arr_acc[tuple([np.arange(self.trim_size*2 , self.frame_count*4 - self.trim_size*2 ), [0]])]
+        # temp[:,1] = self.imu_arr_acc[tuple([np.arange(self.trim_size*2 , self.frame_count*4- self.trim_size*2 ), [1]])]
+        # temp[:,2] = self.imu_arr_acc[tuple([np.arange(self.trim_size*2 , self.frame_count*4- self.trim_size*2 ), [2]])]
+        # temp[:,3] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*2 , self.frame_count*4- self.trim_size*2 ), [0]])]
+        # temp[:,4] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*2 , self.frame_count*4- self.trim_size*2 ), [1]])]
+        # temp[:,5] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*2 , self.frame_count*4- self.trim_size*2 ), [2]])]
+        temp = np.zeros((self.frame_count*4-self.trim_size*4, 6))
         temp[:,0] = self.imu_arr_acc[tuple([np.arange(self.trim_size*2, self.frame_count*4 - self.trim_size*2), [0]])]
-        temp[:,0] = self.imu_arr_acc[tuple([np.arange(self.trim_size*2 , self.frame_count*4 - self.trim_size*2 ), [0]])]
-        temp[:,1] = self.imu_arr_acc[tuple([np.arange(self.trim_size*2 , self.frame_count*4- self.trim_size*2 ), [1]])]
-        temp[:,2] = self.imu_arr_acc[tuple([np.arange(self.trim_size*2 , self.frame_count*4- self.trim_size*2 ), [2]])]
-        temp[:,3] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*2 , self.frame_count*4- self.trim_size*2 ), [0]])]
-        temp[:,4] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*2 , self.frame_count*4- self.trim_size*2 ), [1]])]
-        temp[:,5] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*2 , self.frame_count*4- self.trim_size*2 ), [2]])]
-        # temp = np.zeros((self.frame_count*4-self.trim_size*4*2, 6))
-        # temp[:,0] = self.imu_arr_acc[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [0]])]
-        # temp[:,1] = self.imu_arr_acc[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [1]])]
-        # temp[:,2] = self.imu_arr_acc[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [2]])]
-        # temp[:,3] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [0]])]
-        # temp[:,4] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [1]])]
-        # temp[:,5] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*4, self.frame_count*4 - self.trim_size*4), [2]])]
+        temp[:,1] = self.imu_arr_acc[tuple([np.arange(self.trim_size*2, self.frame_count*4 - self.trim_size*2), [1]])]
+        temp[:,2] = self.imu_arr_acc[tuple([np.arange(self.trim_size*2, self.frame_count*4 - self.trim_size*2), [2]])]
+        temp[:,3] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*2, self.frame_count*4 - self.trim_size*2), [0]])]
+        temp[:,4] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*2, self.frame_count*4 - self.trim_size*2), [1]])]
+        temp[:,5] = self.imu_arr_gyro[tuple([np.arange(self.trim_size*2, self.frame_count*4 - self.trim_size*2), [2]])]
 
         return temp
 
