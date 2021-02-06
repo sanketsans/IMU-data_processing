@@ -12,31 +12,6 @@ sys.path.append('../')
 from variables import Variables, RootVariables
 from build_dataset import BUILDING_DATASETS
 from torchvision import transforms
-from helpers import Helpers
-
-## save the extracted dataset in each folder.
-class UNIFIED_DATASET(Dataset):
-    def __init__(self, frame_data, imu_data, gaze_data, device=None):
-        self.transforms = transforms.Compose([transforms.ToTensor()])
-        self.frame_data = frame_data
-        self.imu_data = imu_data
-        self.gaze_data = gaze_data
-        self.device = device
-
-    def __len__(self):
-        return len(self.imu_data) -1
-
-    def __getitem__(self, index):
-        checkedLast = False
-        while True:
-            check = np.isnan(self.gaze_data[index])
-            if check.any():
-                index = (index - 1) if checkedLast else (index + 1)
-                if index == self.__len__():
-                    checkedLast = True
-            else:
-                break
-        return self.transforms(self.frame_data[index]).to(self.device), torch.from_numpy(np.concatenate((self.imu_data[index], self.imu_data[index+1]), axis=0)).to(self.device), torch.from_numpy(self.gaze_data[index]*1000.0).to(self.device)
 
 class IMU_GAZE_FRAME_DATASET:
     def __init__(self, root, frame_size, trim_size, distribution='N'):
@@ -62,13 +37,6 @@ class IMU_GAZE_FRAME_DATASET:
 
         self.frame_datasets = self.dataset.load_unified_frame_dataset()
 
-#         if distribution == 'N':
-#             self.imu_train_datasets = self.dataset.normalization(self.imu_train_datasets)
-#             self.imu_test_datasets = self.dataset.normalization(self.imu_test_datasets)
-#         else:
-#             self.imu_train_datasets = self.dataset.standarization(self.imu_train_datasets)
-#             self.imu_test_datasets = self.dataset.standarization(self.imu_test_datasets)
-
         self.gaze_train_datasets = self.gaze_train_datasets.reshape(-1, 4, self.gaze_train_datasets.shape[-1])
         self.imu_train_datasets = self.imu_train_datasets.reshape(-1, 4, self.imu_train_datasets.shape[-1])
         #
@@ -77,9 +45,6 @@ class IMU_GAZE_FRAME_DATASET:
 
     def __len__(self):
         return int(len(self.gaze_train_datasets))      ## number of frames corresponding to
-
-    # def __getitem__(self, index):
-    #     return self.imu_datasets[index], self.gaze_datasets[index]
 
 if __name__ =="__main__":
     var = RootVariables()

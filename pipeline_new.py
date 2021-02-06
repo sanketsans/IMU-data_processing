@@ -10,9 +10,8 @@ import torch.optim as optim
 from torch.utils.data.sampler import SequentialSampler
 import argparse
 from tqdm import tqdm
-from encoder_imu import IMU_ENCODER
+from encoder_imu import IMU_ENCODER, TEMP_ENCODER
 from encoder_vis import VIS_ENCODER
-from prepare_dataset import IMU_GAZE_FRAME_DATASET, UNIFIED_DATASET
 from helpers import Helpers
 # from getDataset import FRAME_IMU_DATASET
 from variables import RootVariables
@@ -48,11 +47,11 @@ class FusionPipeline(nn.Module):
             params.requires_grad = True
 
         ## TEMPORAL MODELS
-        self.temporalModel = IMU_ENCODER(self.temporalSize, self.device)
+        self.temporalModel = TEMP_ENCODER(self.temporalSize, self.device)
 
         self.downsample_fc = nn.Linear(256, self.var.hidden_size*2)
         self.fc1 = nn.Linear(self.var.hidden_size*2, 2).to(self.device)
-        self.droput = nn.Dropout(0.3)
+        self.droput = nn.Dropout(0.45)
         # self.fc2 = nn.Linear(128, 2).to(self.device)
         # self.fusionLayer_sv = nn.Linear(512, 256).to(self.device)
         # self.fusionLayer_si = nn.Linear(512, 256).to(self.device)
@@ -72,7 +71,7 @@ class FusionPipeline(nn.Module):
         return self.imu_encoder_params, self.frame_encoder_params
 
     def fusion_network(self, imu_params, frame_params):
-        downsample_frame_params = F.relu(self.downsample_fc(frame_params))
+        downsample_frame_params = F.relu(self.dropout(self.downsample_fc(frame_params)))
         return torch.cat((downsample_frame_params, imu_params), dim=1).to(self.device)
 
         # sv = self.activation(self.fusionLayer_sv(torch.cat((frame_params, imu_params), dim=1))).to(self.device)
@@ -146,8 +145,10 @@ if __name__ == "__main__":
     frame_training_feat, frame_testing_feat, imu_training_feat, imu_testing_feat, training_target, testing_target = utils.load_datasets()
 
     os.chdir(pipeline.var.root)
-    imu_training_feat = pipeline.normalization(imu_training_feat)
-    imu_testing_feat = pipeline.normalization(imu_testing_feat)
+    imu_training_feat = np.copy(imu_training)
+    imu_testing_feat = np.copy(imu_testing)
+    imu_training_feat = utils.standarization(imu_training_feat)
+    imu_testing_feat = utils.standarization(imu_testing_feat)
 
     for epoch in tqdm(range(n_epochs), desc="epochs"):
         trainDataset = FINAL_DATASET(frame_training_feat, imu_training_feat, training_target)

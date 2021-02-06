@@ -7,11 +7,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, random_split
 import argparse
 from tqdm import tqdm
 sys.path.append('../')
-from prepare_dataset import IMU_GAZE_FRAME_DATASET
 from variables import RootVariables
 from helpers import Helpers
 from torch.utils.tensorboard import SummaryWriter
@@ -59,30 +58,6 @@ class IMU_PIPELINE(nn.Module):
         y = lfilter(b, a, data)
         return y
 
-    def standarization(self, datas):
-        seq = datas.shape[1]
-        datas = datas.reshape(-1, datas.shape[-1])
-        rows, cols = datas.shape
-        for i in range(cols):
-            mean = np.mean(datas[:,i])
-            std = np.std(datas[:,i])
-            datas[:,i] = (datas[:,i] - mean) / std
-
-        datas = datas.reshape(-1, seq, datas.shape[-1])
-        return datas
-
-    def normalization(self, datas):
-        seq = datas.shape[1]
-        datas = datas.reshape(-1, datas.shape[-1])
-        rows, cols = datas.shape
-        for i in range(cols):
-            max = np.max(datas[:,i])
-            min = np.min(datas[:,i])
-            datas[:,i] = (datas[:,i] - min ) / (max - min)
-
-        datas = datas.reshape(-1, seq, datas.shape[-1])
-        return datas
-
     def forward(self, x):
         h0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
         c0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
@@ -91,7 +66,7 @@ class IMU_PIPELINE(nn.Module):
         h0 = Variable(h0, requires_grad=True)
         c0 = Variable(c0, requires_grad=True)
 
-        x = self.fc0(x)
+        # x = self.fc0(x)
         out, _ = self.lstm(x, (h0, c0))
         out = self.activation(self.fc1(out[:,-1,:]))
         return out
@@ -101,13 +76,13 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_checkpoint = 'signal_pipeline_checkpoint.pth'
 
-    n_epochs = 21   ## 250 done, 251 needs to start
+    n_epochs = 0
     toggle = 0
 
     pipeline = IMU_PIPELINE()
     utils = Helpers()
 
-    optimizer = optim.Adam(pipeline.parameters(), lr=1e-5)
+    optimizer = optim.Adam(pipeline.parameters(), lr=1e-4)
     criterion = nn.L1Loss()
     print(pipeline)
     if Path(pipeline.var.root + model_checkpoint).is_file():
@@ -117,18 +92,22 @@ if __name__ == "__main__":
         # pipeline.current_loss = checkpoint['loss']
         print('Model loaded')
 
-    _, _, imu_training_feat, imu_testing_feat, training_target, testing_target = utils.load_datasets()
+    _, _, imu_training, imu_testing, training_target, testing_target = utils.load_datasets()
+    print(imu_training[0], training_target[0], imu_training[1442], training_target[1442])
 
     os.chdir(pipeline.var.root)
-    imu_training_feat = pipeline.normalization(imu_training_feat)
-    imu_testing_feat = pipeline.normalization(imu_testing_feat)
+    imu_training_feat = np.copy(imu_training)
+    imu_testing_feat = np.copy(imu_testing)
+    imu_training_feat = utils.standarization(imu_training_feat)
+    imu_testing_feat = utils.standarization(imu_testing_feat)
 
     for epoch in tqdm(range(n_epochs), desc="epochs"):
-        trainDataset = FINAL_DATASET(imu_training_feat, training_target)
-        trainLoader = torch.utils.data.DataLoader(trainDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=4)
+        Dataset = FINAL_DATASET(imu_training_feat, training_target)
+        trainset, testset = random_split(Dataset, int(len(Dataset)*0.8), int(len(Dataset)*0.2))
+        trainLoader = torch.utils.data.DataLoader(trainset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=4)
         tqdm_trainLoader = tqdm(trainLoader)
-        testDataset = FINAL_DATASET(imu_testing_feat, testing_target)
-        testLoader = torch.utils.data.DataLoader(testDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=4)
+        # testDataset = FINAL_DATASET(imu_testing_feat, testing_target)
+        testLoader = torch.utils.data.DataLoader(testset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=4)
         tqdm_testLoader = tqdm(testLoader)
 
         num_samples = 0

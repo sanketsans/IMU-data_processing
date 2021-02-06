@@ -6,13 +6,11 @@ import math
 import numpy as np
 from pathlib import Path
 sys.path.append('../')
-from helpers import Helpers
 from variables import Variables
 import cv2
 
 class JSON_LOADER:
     def __init__(self, folder):
-        self.utils = Helpers()
         self.var = Variables()
         self.folder = folder
         if Path(self.var.root + self.folder + 'gazedata.gz').is_file():
@@ -31,14 +29,47 @@ class JSON_LOADER:
         self.gaze_start_timestamp = float(self.var.gaze_dataList[0]['timestamp'])
         self.start_timestamp = (self.imu_start_timestamp if self.gaze_start_timestamp < self.imu_start_timestamp else self.gaze_start_timestamp) - 0.01
 
+    def floor(self, value):
+        return math.floor(value*100)/100.0
+
+    def get_sample_rate(self, samples):
+        total_sample = 0.0
+        not_consistent = 0
+        curr_bin = math.floor(samples[0])
+        count = 0
+        sample_rate = {}
+        not_cons_sample_rate = {}
+        for sample in samples:
+            total_sample += sample - total_sample
+            if total_sample > float(curr_bin)+0.99:
+                sample_rate[curr_bin] = count
+                # if (count != 100):
+                #     not_consistent += 1
+                #     not_cons_sample_rate[curr_bin] = count
+                curr_bin = math.floor(total_sample)
+                count = 0
+            count += 1
+
+        sample_rate[curr_bin] = count
+        # if (count != 100):
+        #     not_consistent += 1
+        #     not_cons_sample_rate[curr_bin] = count
+
+        return sample_rate ##if you want all the sample rates.
+        # return not_cons_sample_rate, not_consistent
+
+    def get_average_remove_dup(self, samples, avg_ind, rm_ind):
+            samples[avg_ind] = (samples[avg_ind] + samples[rm_ind]) / 2.0
+            samples.pop(len(samples) - abs(rm_ind))
+
     def POP_GAZE_DATA(self, frame_count, return_val=False):
         ### GAZE DATA
         nT, oT = 0.0, 0.0
         for data in self.var.gaze_dataList:
-            nT = self.utils.floor(data['timestamp'])
+            nT = self.floor(data['timestamp'])
             try:
                 if(float(data['timestamp']) > self.start_timestamp):
-                    # nT = self.utils.floor(data['timestamp'])
+                    # nT = self.floor(data['timestamp'])
                     # diff = round(nT - oT, 2)
                     if (0.0 <= float(data['data']['gaze2d'][0]) <= 1.0) and (0.0 <= float(data['data']['gaze2d'][1]) <= 1.0):
                         self.var.gaze_data[0].append(float(data['data']['gaze2d'][0]))
@@ -61,7 +92,7 @@ class JSON_LOADER:
                 self.var.gaze_data[1].append(np.nan)
 
         if return_val:
-            return self.utils.get_sample_rate(self.var.timestamps_gaze)
+            return self.get_sample_rate(self.var.timestamps_gaze)
 
     def POP_IMU_DATA(self, frame_count, cut_short =True, return_val=False):
         nT, oT = 0.0, 0.0
@@ -69,7 +100,7 @@ class JSON_LOADER:
         for index, data in enumerate(self.var.imu_dataList):
             try:
                 if(float(data['timestamp']) > self.start_timestamp):
-                    nT = self.utils.floor(data['timestamp'])
+                    nT = self.floor(data['timestamp'])
                     diff = round((nT - oT), 2)
                     self.var.imu_data_acc[0].append(float(data['data']['accelerometer'][0]))
                     self.var.imu_data_acc[1].append(float(data['data']['accelerometer'][1]) ) # + 9.80665
@@ -82,13 +113,13 @@ class JSON_LOADER:
                     self.var.timestamps_imu.append(nT)
                     if cut_short:
                         if (diff <= 0.01 and self.var.check_repeat==True):
-                            self.utils.get_average_remove_dup(self.var.imu_data_acc[0], -2, -3)
-                            self.utils.get_average_remove_dup(self.var.imu_data_acc[1], -2, -3)
-                            self.utils.get_average_remove_dup(self.var.imu_data_acc[2], -2, -3)
+                            self.get_average_remove_dup(self.var.imu_data_acc[0], -2, -3)
+                            self.get_average_remove_dup(self.var.imu_data_acc[1], -2, -3)
+                            self.get_average_remove_dup(self.var.imu_data_acc[2], -2, -3)
 
-                            self.utils.get_average_remove_dup(self.var.imu_data_gyro[0], -2, -3)
-                            self.utils.get_average_remove_dup(self.var.imu_data_gyro[1], -2, -3)
-                            self.utils.get_average_remove_dup(self.var.imu_data_gyro[2], -2, -3)
+                            self.get_average_remove_dup(self.var.imu_data_gyro[0], -2, -3)
+                            self.get_average_remove_dup(self.var.imu_data_gyro[1], -2, -3)
+                            self.get_average_remove_dup(self.var.imu_data_gyro[2], -2, -3)
 
                             self.var.timestamps_imu.pop(len(self.var.timestamps_imu) - 3)
                             # print('Mid point resolved')
@@ -115,7 +146,7 @@ class JSON_LOADER:
                 self.var.imu_data_gyro[2].append(np.nan)
 
         if return_val:
-            return self.utils.get_sample_rate(self.var.timestamps_imu)
+            return self.get_sample_rate(self.var.timestamps_imu)
                 #############################
 
 if __name__ == "__main__":

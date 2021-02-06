@@ -17,7 +17,7 @@ class BUILDING_DATASETS:
         self.frame_size = frame_size
         self.trim_size = trim_frame_size
         self.dataset = None
-        self.imu_arr_acc, self.imu_arr_gyro, self.gaze_array = None, None, None
+        self.imu_arr_acc, self.imu_arr_gyro, self.gaze_arr = None, None, None
         self.last = None
         self.train_new, self.test_new = None, None
         temp = None
@@ -30,25 +30,6 @@ class BUILDING_DATASETS:
         self.stack_frames = []
 
         self.panda_data = {}
-
-    def standarization(self, datas):
-        datas = datas.reshape(-1, datas.shape[-1])
-        rows, cols = datas.shape
-        for i in range(cols):
-            mean = np.mean(datas[:,i])
-            std = np.std(datas[:,i])
-            datas[:,i] = (datas[:,i] - mean) / std
-
-        return datas
-
-    def normalization(self, datas):
-        datas = datas.reshape(-1, datas.shape[-1])
-        rows, cols = datas.shape
-        for i in range(cols):
-            max = np.max(datas[:,i])
-            min = np.min(datas[:,i])
-            datas[:,i] = (datas[:,i] - min ) / (max - min)
-        return datas
 
     def populate_gaze_data(self, subDir, toggle=1):
         if toggle != self.toggle:

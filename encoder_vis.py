@@ -28,7 +28,7 @@ class VIS_ENCODER(nn.Module):
         self.fc1 = nn.Linear(1024*4*4, 4096).to(self.device)
         self.fc2 = nn.Linear(4096, 256).to(self.device)
         self.fc3 = nn.Linear(256, 2).to(self.device)
-        self.dropout = nn.Dropout(0.35)
+        self.dropout = nn.Dropout(0.45)
         self.activation = nn.Sigmoid()
         # self.net[8][1] = nn.ReLU(inplace=False)
         self.net[8] = self.net[8][0]

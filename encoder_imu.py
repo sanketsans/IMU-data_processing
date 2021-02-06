@@ -29,6 +29,26 @@ class IMU_ENCODER(nn.Module):
         # out = self.activation(self.fc1(out[:,-1,:]))
         return out[:,-1,:]
 
+class TEMP_ENCODER(nn.Module):
+    def __init__(self, input_size, device):
+        super(IMU_ENCODER, self).__init__()
+        torch.manual_seed(0)
+        self.var = RootVariables()
+        self.device = device
+        self.lstm = nn.LSTM(self.var.imu_input_size, self.var.hidden_size, self.var.num_layers/2, batch_first=True, bidirectional=True).to(self.device)
+        self.fc0 = nn.Linear(6, self.var.imu_input_size)
+
+    def forward(self, x):
+        # hidden = (h0, c0)
+        h0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+        c0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+        # h0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+        # c0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+        # x = self.fc0(x)
+        out, _ = self.lstm(x, (h0, c0))
+        # out = self.activation(self.fc1(out[:,-1,:]))
+        return out[:,-1,:]
+
 ## PREPARING THE DATA
 # folder = sys.argv[1]
 # dataset_folder = '/home/sans/Downloads/gaze_data/'
