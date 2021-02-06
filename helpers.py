@@ -147,7 +147,7 @@ class Helpers:
             with open(self.var.root + str(self.var.frame_size) + '_frames_training_feat_' + str(self.var.trim_frame_size) + '.npy', 'wb') as f:
                 np.save(f, frame_training_feat)
                 f.close()
-            with open(self.var.root + str(self.var.frame_size) + '_frame_testing_feat_' + str(self.var.trim_frame_size) + '.npy', 'wb') as f:
+            with open(self.var.root + str(self.var.frame_size) + '_frames_testing_feat_' + str(self.var.trim_frame_size) + '.npy', 'wb') as f:
                 np.save(f, frame_testing_feat)
                 f.close()
             with open(self.var.root + str(self.var.frame_size) + '_imu_training_feat_' + str(self.var.trim_frame_size) + '.npy', 'wb') as f:
