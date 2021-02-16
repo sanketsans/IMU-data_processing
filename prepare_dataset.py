@@ -20,23 +20,21 @@ class IMU_GAZE_FRAME_DATASET:
         self.frame_datasets = None
         self.imu_train_datasets, self.gaze_train_datasets = None, None
         self.imu_test_datasets, self.gaze_test_datasets = None, None
-        # if Path(self.root + 'imuExtracted_training_data_' + str(trim_size) + '.npy').is_file():
-        #     print('Files exists')
-        #     self.imu_train_datasets = np.load(self.root + 'imuExtracted_training_data_' + str(trim_size) + '.npy')
-        #     self.gaze_train_datasets = np.load(self.root + 'gazeExtracted_training_data_' + str(trim_size) + '.npy')
-        #     self.imu_test_datasets = np.load(self.root + 'imuExtracted_testing_data_' + str(trim_size) + '.npy')
-        #     self.gaze_test_datasets = np.load(self.root + 'gazeExtracted_testing_data_' + str(trim_size) + '.npy')
-        # else:
-        #     print('saved files does not exis')
-        #     self.imu_train_datasets, self.imu_test_datasets = self.dataset.load_unified_imu_dataset()
-        #     self.gaze_train_datasets, self.gaze_test_datasets = self.dataset.load_unified_gaze_dataset()
-        #     np.save(self.root + 'imuExtracted_training_data_' + str(trim_size) + '.npy', self.imu_train_datasets)
-        #     np.save(self.root + 'gazeExtracted_training_data_' + str(trim_size) + '.npy', self.gaze_train_datasets)
-        #     np.save(self.root + 'imuExtracted_testing_data_' + str(trim_size) + '.npy', self.imu_test_datasets)
-        #     np.save(self.root + 'gazeExtracted_testing_data_' + str(trim_size) + '.npy', self.gaze_test_datasets)
+        if Path(self.root + 'imuExtracted_training_data_' + str(trim_size) + '.npy').is_file():
+            print('Files exists')
+            self.imu_train_datasets = np.load(self.root + 'imuExtracted_training_data_' + str(trim_size) + '.npy')
+            self.gaze_train_datasets = np.load(self.root + 'gazeExtracted_training_data_' + str(trim_size) + '.npy')
+            self.imu_test_datasets = np.load(self.root + 'imuExtracted_testing_data_' + str(trim_size) + '.npy')
+            self.gaze_test_datasets = np.load(self.root + 'gazeExtracted_testing_data_' + str(trim_size) + '.npy')
+        else:
+            print('saved files does not exis')
+            self.imu_train_datasets, self.imu_test_datasets = self.dataset.load_unified_imu_dataset()
+            self.gaze_train_datasets, self.gaze_test_datasets = self.dataset.load_unified_gaze_dataset()
+            np.save(self.root + 'imuExtracted_training_data_' + str(trim_size) + '.npy', self.imu_train_datasets)
+            np.save(self.root + 'gazeExtracted_training_data_' + str(trim_size) + '.npy', self.gaze_train_datasets)
+            np.save(self.root + 'imuExtracted_testing_data_' + str(trim_size) + '.npy', self.imu_test_datasets)
+            np.save(self.root + 'gazeExtracted_testing_data_' + str(trim_size) + '.npy', self.gaze_test_datasets)
 
-        self.imu_train_datasets, self.imu_test_datasets = self.dataset.load_unified_imu_dataset()
-        self.gaze_train_datasets, self.gaze_test_datasets = self.dataset.load_unified_gaze_dataset()
         self.frame_datasets = self.dataset.load_unified_frame_dataset()
 
         self.gaze_train_datasets = self.gaze_train_datasets.reshape(-1, 4, self.gaze_train_datasets.shape[-1])

@@ -143,8 +143,8 @@ if __name__ == "__main__":
                 # p[0] = pred_gaze_pts[0]*1080
                 # p[1] = pred_gaze_pts[1]*1920
 
-                padding_r = 100.0
-                padding = 100.0
+                padding_r = 50.0
+                padding = 50.0
                 sign = 1 if random.random() > 0.5 else -1
                 # print(np.abs(pred_gaze_pts[0]*1080-gt_gaze_pts[0]*1080), np.abs(pred_gaze_pts[1]*1920-gt_gaze_pts[1]*1920))
                 start_point = (int(gt_gaze_pts[0]*frame.shape[1]) - int(padding), int(gt_gaze_pts[1]*frame.shape[0]) + int(padding_r))

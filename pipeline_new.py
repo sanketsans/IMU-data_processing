@@ -8,6 +8,8 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data.sampler import SequentialSampler
+from torch.utils.data import Dataset
+from torchvision import transforms
 import argparse
 from tqdm import tqdm
 from encoder_imu import IMU_ENCODER, TEMP_ENCODER
@@ -33,25 +35,27 @@ class FusionPipeline(nn.Module):
 
         ## IMU Models
         self.imuModel = IMU_ENCODER(self.var.imu_input_size, self.device)
-        imuCheckpoint = torch.load(self.var.root + self.imuCheckpoint_file)
-        self.imuModel.load_state_dict(imuCheckpoint['model_state_dict'])
+        # imuCheckpoint = torch.load(self.var.root + self.imuCheckpoint_file)
+        # self.imuModel.load_state_dict(imuCheckpoint['model_state_dict'])
         for params in self.imuModel.parameters():
             params.requires_grad = True
+        # self.imuRegressor = nn.Linear(self.var.hidden_size*2, 2).to(self.device)
 
         ## FRAME MODELS
         self.args = args
         self.frameModel =  VIS_ENCODER(self.args, self.checkpoint_path, self.device)
-        frameCheckpoint = torch.load(self.var.root + self.frameCheckpoint_file)
-        self.frameModel.load_state_dict(frameCheckpoint['model_state_dict'])
+        # frameCheckpoint = torch.load(self.var.root + self.frameCheckpoint_file)
+        # self.frameModel.load_state_dict(frameCheckpoint['model_state_dict'])
         for params in self.frameModel.parameters():
             params.requires_grad = True
+        # self.frameRegressor = nn.Linear(256, 2).to(self.device)
 
         ## TEMPORAL MODELS
         self.temporalModel = TEMP_ENCODER(self.temporalSize, self.device)
 
-        self.downsample_fc = nn.Linear(256, self.var.hidden_size*2)
+        self.downsample_fc = nn.Linear(256, self.var.hidden_size*2).to(self.device)
         self.fc1 = nn.Linear(self.var.hidden_size*2, 2).to(self.device)
-        self.droput = nn.Dropout(0.45)
+        self.dropuot = nn.Dropout(0.45)
         # self.fc2 = nn.Linear(128, 2).to(self.device)
         # self.fusionLayer_sv = nn.Linear(512, 256).to(self.device)
         # self.fusionLayer_si = nn.Linear(512, 256).to(self.device)
@@ -61,7 +65,7 @@ class FusionPipeline(nn.Module):
         self.imu_encoder_params = None
         self.frame_encoder_params = None
 
-        self.tensorboard_folder = 'batch_64_Signal_outputs/'
+        self.tensorboard_folder = 'pipeline_SGD' #'batch_64_Signal_outputs/'
 
     def get_encoder_params(self, imu_BatchData, frame_BatchData):
         self.imu_encoder_params = self.imuModel(imu_BatchData.float()).to(self.device)
@@ -71,7 +75,7 @@ class FusionPipeline(nn.Module):
         return self.imu_encoder_params, self.frame_encoder_params
 
     def fusion_network(self, imu_params, frame_params):
-        downsample_frame_params = F.relu(self.dropout(self.downsample_fc(frame_params)))
+        downsample_frame_params = F.relu(self.downsample_fc(frame_params)).to(self.device)
         return torch.cat((downsample_frame_params, imu_params), dim=1).to(self.device)
 
         # sv = self.activation(self.fusionLayer_sv(torch.cat((frame_params, imu_params), dim=1))).to(self.device)
@@ -98,7 +102,7 @@ class FusionPipeline(nn.Module):
         fused = self.fusion_network(imu_params, frame_params)
         coordinate = self.temporal_modelling(fused)
 
-        return coordinate*1000.0
+        return coordinate
 
     def get_num_correct(self, pred, label):
         return torch.logical_and((torch.abs(pred[:,0]*1920-label[:,0]*1920) <= 100.0), (torch.abs(pred[:,1]*1080-label[:,1]*1080) <= 100.0)).sum().item()
@@ -115,7 +119,7 @@ class FINAL_DATASET(Dataset):
         return len(self.label)
 
     def __getitem__(self, index):
-        return self.transforms(self.feat[index]).to(self.device), torch.from_numpy(self.imu_feat[index]).to(self.device), torch.from_numpy(self.label[index]).to(self.device)
+        return self.transforms(self.frame_feat[index]).to(self.device), torch.from_numpy(self.imu_feat[index]).to(self.device), torch.from_numpy(self.label[index]).to(self.device)
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -129,10 +133,10 @@ if __name__ == "__main__":
     flownet_checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
     trim_frame_size = 150
     arg = 'del'
-    n_epochs = 1
+    n_epochs = 0
     # current_loss_mean_train, current_loss_mean_val, current_loss_mean_test = 0.0, 0.0,  0.0
     pipeline = FusionPipeline(args, flownet_checkpoint, trim_frame_size, device)
-    optimizer = optim.Adam(pipeline.parameters(), lr=1e-4)
+    optimizer = optim.SGD(pipeline.parameters(), lr=1e-4, momentum=0.9)
     criterion = nn.L1Loss()
     print(pipeline)
     if Path(pipeline.var.root + model_checkpoint).is_file():
@@ -142,11 +146,14 @@ if __name__ == "__main__":
         # pipeline.current_loss = checkpoint['loss']
         print('Model loaded')
 
-    frame_training_feat, frame_testing_feat, imu_training_feat, imu_testing_feat, training_target, testing_target = utils.load_datasets()
+    test_folder = 'train_BookShelf_S1'
+    frame_training_feat, frame_testing_feat, imu_training, imu_testing, training_target, testing_target = utils.load_datasets(test_folder)
+    imu_training_feat[:, :, 1] += 9.80665
 
     os.chdir(pipeline.var.root)
     imu_training_feat = np.copy(imu_training)
     imu_testing_feat = np.copy(imu_testing)
+    imu_training_feat[:, :, 1] += 9.80665
     imu_training_feat = utils.standarization(imu_training_feat)
     imu_testing_feat = utils.standarization(imu_testing_feat)
 
@@ -162,15 +169,21 @@ if __name__ == "__main__":
         total_loss, total_correct, total_accuracy = 0.0, 0.0, 0.0
         pipeline.train()
         for batch_index, (frame_feat, imu_feat, labels) in enumerate(tqdm_trainLoader):
-            num_samples += feat.size(0)
+            num_samples += frame_feat.size(0)
             labels = labels[:,0,:]
             pred = pipeline(frame_feat, imu_feat).to(device)
-            loss = criterion(pred*1000.0, (labels*1000.0).float())
+            imuPred = pipeline.activation(pipeline.imuRegressor(pipeline.imuModel(imu_feat.float()))).to(device)
+            framePred = pipeline.activation(pipeline.frameRegressor(pipeline.frameModel(frame_feat.float()))).to(device)
+            combLoss = criterion(pred, labels.float())
+            imuLoss = criterion(imuPred, labels.float())
+            frameLoss = criterion(framePred, labels.float())
+            loss = combLoss + imuLoss + frameLoss
             total_loss += loss.item()
             total_correct += pipeline.get_num_correct(pred, labels.float())
             total_accuracy = total_correct / num_samples
             tqdm_trainLoader.set_description('training: ' + '_loss: {:.4} correct: {} accuracy: {:.3}'.format(
                 total_loss / num_samples, total_correct, 100.0*total_accuracy))
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -179,7 +192,7 @@ if __name__ == "__main__":
             # _ = os.system('mv runs new_backup')
             _ = os.system('rm -rf runs/' + pipeline.tensorboard_folder)
 
-        tb = SummaryWriter('runs/' + pipeline.tensorboard_folder)
+        tb = SummaryWriter(pipeline.var.root + 'datasets/' + test_folder[5:] + '/runs/' + pipeline.tensorboard_folder)
         tb.add_scalar("Train Loss", total_loss / num_samples, epoch)
         tb.add_scalar("Training Correct", total_correct, epoch)
         tb.add_scalar("Train Accuracy", total_accuracy, epoch)
@@ -189,10 +202,15 @@ if __name__ == "__main__":
             num_samples = 0
             total_loss, total_correct, total_accuracy = 0.0, 0.0, 0.0
             for batch_index, (frame_feat, imu_feat, labels) in enumerate(tqdm_testLoader):
-                num_samples += feat.size(0)
+                num_samples += frame_feat.size(0)
                 labels = labels[:,0,:]
                 pred = pipeline(frame_feat, imu_feat).to(device)
-                loss = criterion(pred*1000.0, (labels*1000.0).float())
+                imuPred = pipeline.activation(pipeline.imuRegressor(pipeline.imuModel(imu_feat.float()))).to(device)
+                framePred = pipeline.activation(pipeline.frameRegressor(pipeline.frameModel(frame_feat.float()))).to(device)
+                combLoss = criterion(pred, labels.float())
+                imuLoss = criterion(imuPred, labels.float())
+                frameLoss = criterion(framePred, labels.float())
+                loss = combLoss + imuLoss + frameLoss
                 total_loss += loss.item()
                 total_correct += pipeline.get_num_correct(pred, labels.float())
                 total_accuracy = total_correct / num_samples

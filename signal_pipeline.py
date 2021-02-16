@@ -37,7 +37,7 @@ class IMU_PIPELINE(nn.Module):
         self.var = RootVariables()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.lstm = nn.LSTM(self.var.imu_input_size, self.var.hidden_size, self.var.num_layers, batch_first=True, dropout=0.65, bidirectional=True).to(self.device)
-        self.fc0 = nn.Linear(6, self.var.imu_input_size).to(self.device)
+        # self.fc0 = nn.Linear(6, self.var.imu_input_size).to(self.device)
         self.fc1 = nn.Linear(self.var.hidden_size*2, 2).to(self.device)
         self.dropout = nn.Dropout(0.2)
         self.activation = nn.Sigmoid()
@@ -59,12 +59,10 @@ class IMU_PIPELINE(nn.Module):
         return y
 
     def forward(self, x):
-        h0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
-        c0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
+        h0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size, requires_grad=True).to(self.device)
+        c0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size, requires_grad=True).to(self.device)
         # h0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
         # c0 = torch.zeros(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size).to(self.device)
-        h0 = Variable(h0, requires_grad=True)
-        c0 = Variable(c0, requires_grad=True)
 
         # x = self.fc0(x)
         out, _ = self.lstm(x, (h0, c0))
@@ -76,7 +74,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_checkpoint = 'signal_pipeline_checkpoint.pth'
 
-    n_epochs = 0
+    n_epochs = 11
     toggle = 0
 
     pipeline = IMU_PIPELINE()
@@ -93,7 +91,6 @@ if __name__ == "__main__":
         print('Model loaded')
 
     _, _, imu_training, imu_testing, training_target, testing_target = utils.load_datasets()
-    print(imu_training[0], training_target[0], imu_training[1442], training_target[1442])
 
     os.chdir(pipeline.var.root)
     imu_training_feat = np.copy(imu_training)
@@ -102,12 +99,11 @@ if __name__ == "__main__":
     imu_testing_feat = utils.standarization(imu_testing_feat)
 
     for epoch in tqdm(range(n_epochs), desc="epochs"):
-        Dataset = FINAL_DATASET(imu_training_feat, training_target)
-        trainset, testset = random_split(Dataset, int(len(Dataset)*0.8), int(len(Dataset)*0.2))
-        trainLoader = torch.utils.data.DataLoader(trainset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=4)
+        trainDataset = FINAL_DATASET(imu_training_feat, training_target)
+        trainLoader = torch.utils.data.DataLoader(trainDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=4)
         tqdm_trainLoader = tqdm(trainLoader)
-        # testDataset = FINAL_DATASET(imu_testing_feat, testing_target)
-        testLoader = torch.utils.data.DataLoader(testset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=4)
+        testDataset = FINAL_DATASET(imu_testing_feat, testing_target)
+        testLoader = torch.utils.data.DataLoader(testDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=4)
         tqdm_testLoader = tqdm(testLoader)
 
         num_samples = 0
@@ -117,7 +113,7 @@ if __name__ == "__main__":
             num_samples += feat.size(0)
             labels = labels[:,0,:]
             pred = pipeline(feat.float()).to(device)
-            loss = criterion(pred*1000.0, (labels*1000.0).float())
+            loss = criterion(pred, labels.float())
             total_loss += loss.item()
             total_correct += pipeline.get_num_correct(pred, labels.float())
             total_accuracy = total_correct / num_samples
@@ -144,7 +140,7 @@ if __name__ == "__main__":
                 num_samples += feat.size(0)
                 labels = labels[:,0,:]
                 pred = pipeline(feat.float()).to(device)
-                loss = criterion(pred*1000.0, (labels*1000.0).float())
+                loss = criterion(pred, labels.float())
                 total_loss += loss.item()
                 total_correct += pipeline.get_num_correct(pred, labels.float())
                 total_accuracy = total_correct / num_samples
