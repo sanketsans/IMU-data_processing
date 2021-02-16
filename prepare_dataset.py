@@ -14,26 +14,26 @@ from build_dataset import BUILDING_DATASETS
 from torchvision import transforms
 
 class IMU_GAZE_FRAME_DATASET:
-    def __init__(self, root, frame_size, trim_size, distribution='N'):
-        self.root = root
-        self.dataset = BUILDING_DATASETS(self.root, frame_size, trim_size)
+    def __init__(self, test_folder):
+        self.var = RootVariables()
+        self.dataset = BUILDING_DATASETS(test_folder)
         self.frame_datasets = None
         self.imu_train_datasets, self.gaze_train_datasets = None, None
         self.imu_test_datasets, self.gaze_test_datasets = None, None
-        if Path(self.root + 'imuExtracted_training_data_' + str(trim_size) + '.npy').is_file():
+        if Path(self.var.root + 'datasets/' + test_folder[5:] + '/imuExtracted_training_data' + '.npy').is_file():
             print('Files exists')
-            self.imu_train_datasets = np.load(self.root + 'imuExtracted_training_data_' + str(trim_size) + '.npy')
-            self.gaze_train_datasets = np.load(self.root + 'gazeExtracted_training_data_' + str(trim_size) + '.npy')
-            self.imu_test_datasets = np.load(self.root + 'imuExtracted_testing_data_' + str(trim_size) + '.npy')
-            self.gaze_test_datasets = np.load(self.root + 'gazeExtracted_testing_data_' + str(trim_size) + '.npy')
+            self.imu_train_datasets = np.load(self.var.root + 'datasets/' + test_folder[5:] + '/imuExtracted_training_data' + '.npy')
+            self.gaze_train_datasets = np.load(self.var.root + 'datasets/' + test_folder[5:] + '/gazeExtracted_training_data' + '.npy')
+            self.imu_test_datasets = np.load(self.var.root + 'datasets/' + test_folder[5:] + '/imuExtracted_testing_data' + '.npy')
+            self.gaze_test_datasets = np.load(self.var.root + 'datasets/' + test_folder[5:] + '/gazeExtracted_testing_data' + '.npy')
         else:
             print('saved files does not exis')
             self.imu_train_datasets, self.imu_test_datasets = self.dataset.load_unified_imu_dataset()
             self.gaze_train_datasets, self.gaze_test_datasets = self.dataset.load_unified_gaze_dataset()
-            np.save(self.root + 'imuExtracted_training_data_' + str(trim_size) + '.npy', self.imu_train_datasets)
-            np.save(self.root + 'gazeExtracted_training_data_' + str(trim_size) + '.npy', self.gaze_train_datasets)
-            np.save(self.root + 'imuExtracted_testing_data_' + str(trim_size) + '.npy', self.imu_test_datasets)
-            np.save(self.root + 'gazeExtracted_testing_data_' + str(trim_size) + '.npy', self.gaze_test_datasets)
+            np.save(self.var.root + 'datasets/' + test_folder[5:] + '/imuExtracted_training_data' + '.npy', self.imu_train_datasets)
+            np.save(self.var.root + 'datasets/' + test_folder[5:] + '/gazeExtracted_training_data' + '.npy', self.gaze_train_datasets)
+            np.save(self.var.root + 'datasets/' + test_folder[5:] + '/imuExtracted_testing_data' + '.npy', self.imu_test_datasets)
+            np.save(self.var.root + 'datasets/' + test_folder[5:] + '/gazeExtracted_testing_data' + '.npy', self.gaze_test_datasets)
 
         self.frame_datasets = self.dataset.load_unified_frame_dataset()
 

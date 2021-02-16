@@ -127,7 +127,7 @@ if __name__ == "__main__":
     parser.add_argument('--fp16', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
     parser.add_argument("--rgb_max", type=float, default=255.)
     args = parser.parse_args()
-    utils = Helpers()
+
 
     model_checkpoint = 'pipeline_checkpoint.pth'
     flownet_checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
@@ -147,7 +147,8 @@ if __name__ == "__main__":
         print('Model loaded')
 
     test_folder = 'train_BookShelf_S1'
-    frame_training_feat, frame_testing_feat, imu_training, imu_testing, training_target, testing_target = utils.load_datasets(test_folder)
+    utils = Helpers(test_folder)
+    frame_training_feat, frame_testing_feat, imu_training, imu_testing, training_target, testing_target = utils.load_datasets()
     imu_training_feat[:, :, 1] += 9.80665
 
     os.chdir(pipeline.var.root)

@@ -43,10 +43,11 @@ class ALIGN_DATASET(Dataset):
         return len(self.gaze_data) - 1
 
 class Helpers:
-    def __init__(self):
+    def __init__(self, test_folder):
         self.var = RootVariables()
+        self.test_folder = test_folder
 
-        self.dataset = IMU_GAZE_FRAME_DATASET(self.var.root, self.var.frame_size, self.var.trim_frame_size)
+        self.dataset = IMU_GAZE_FRAME_DATASET(self.test_folder)
         self.train_imu_dataset, self.test_imu_dataset = self.dataset.imu_train_datasets, self.dataset.imu_test_datasets
         self.train_gaze_dataset, self.test_gaze_dataset = self.dataset.gaze_train_datasets, self.dataset.gaze_test_datasets
 
@@ -107,7 +108,8 @@ class Helpers:
 
         return frames, imu, gaze
 
-    def load_datasets(self, test_folder):
+    def load_datasets(self):
+        test_folder = self.test_folder
         _ = os.system('mkdir ' + self.var.root + 'datasets/' + test_folder[5:])
         test_folder  = test_folder + '/' if test_folder[-1]!='/' else  test_folder
         toggle = 0

@@ -28,7 +28,7 @@ class RootVariables:
         self.hidden_size = 16
         self.num_classes = 256
         self.trim_frame_size = 150
-        self.num_layers = 2
+        self.num_layers = 1
 
 if __name__ =='__main__':
     var = Variables()
