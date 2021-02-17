@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.append('../')
 from variables import Variables
 import cv2
+from itertools import repeat
 
 class JSON_LOADER:
     def __init__(self, folder):
@@ -28,6 +29,9 @@ class JSON_LOADER:
         self.imu_start_timestamp = float(self.var.imu_dataList[0]['timestamp'])
         self.gaze_start_timestamp = float(self.var.gaze_dataList[0]['timestamp'])
         self.start_timestamp = (self.imu_start_timestamp if self.gaze_start_timestamp < self.imu_start_timestamp else self.gaze_start_timestamp) - 0.01
+
+        self.gaze_dict = {}
+        self.imu_dict = {}
 
     def floor(self, value):
         return math.floor(value*100)/100.0
@@ -65,28 +69,50 @@ class JSON_LOADER:
     def POP_GAZE_DATA(self, frame_count, return_val=False):
         ### GAZE DATA
         nT, oT = 0.0, 0.0
+        checked = False
         for data in self.var.gaze_dataList:
-            nT = self.floor(data['timestamp'])
+            nT = round(float(data['timestamp']), 2)
             try:
                 if(float(data['timestamp']) > self.start_timestamp):
-                    # nT = self.floor(data['timestamp'])
-                    # diff = round(nT - oT, 2)
+                    diff = round(nT - oT, 2)
+                    if diff > 1.0 or diff < -0.0 or diff==0.0:
+                        continue
+
+                    if diff > 0.01 and checked:
+                        _diff = round(self.floor(float(data['timestamp'])) - oT, 2)
+                        if _diff != 0.01 and diff > 0.01:
+                            diff *= 100
+                            diff = int(diff)
+                            a = [round(oT + 0.01*i, 2) for i in range(1, diff)]
+
+                            self.var.gaze_data[0].extend(repeat(np.nan, diff - 1))
+                            self.var.gaze_data[1].extend(repeat(np.nan, diff - 1))
+                            print(oT, nT, diff, a, _diff)
+                            self.var.timestamps_gaze.extend(a)
+                            self.var.n_gaze_samples += diff - 1
+
                     if (0.0 <= float(data['data']['gaze2d'][0]) <= 1.0) and (0.0 <= float(data['data']['gaze2d'][1]) <= 1.0):
                         self.var.gaze_data[0].append(float(data['data']['gaze2d'][0]))
                         self.var.gaze_data[1].append(float(data['data']['gaze2d'][1]))
+                        checked = True
+
                     else:
                         self.var.gaze_data[0].append(np.nan)
                         self.var.gaze_data[1].append(np.nan)
+                        checked = True
 
             except Exception as e:
                 self.var.gaze_data[0].append(np.nan)
                 self.var.gaze_data[1].append(np.nan)
+                checked = True
 
-            self.var.n_gaze_samples += 1
-            self.var.timestamps_gaze.append(nT)
-            oT = nT
+            if (float(data['timestamp']) > self.start_timestamp):
+                self.var.n_gaze_samples += 1
+                self.var.timestamps_gaze.append(nT)
+                oT = nT
 
-        if len(self.var.gaze_data[0])/4 < frame_count:
+
+        if len(self.var.gaze_data[0]) < frame_count*4:
             for i in range(len(self.var.gaze_data[0]), frame_count*4):
                 self.var.gaze_data[0].append(np.nan)
                 self.var.gaze_data[1].append(np.nan)
@@ -100,7 +126,7 @@ class JSON_LOADER:
         for index, data in enumerate(self.var.imu_dataList):
             try:
                 if(float(data['timestamp']) > self.start_timestamp):
-                    nT = self.floor(data['timestamp'])
+                    nT = self.floor(float(data['timestamp']))
                     diff = round((nT - oT), 2)
                     self.var.imu_data_acc[0].append(float(data['data']['accelerometer'][0]))
                     self.var.imu_data_acc[1].append(float(data['data']['accelerometer'][1]) ) # + 9.80665
@@ -130,12 +156,13 @@ class JSON_LOADER:
                             self.var.check_repeat = True
                         else:
                             pass
+
                     self.var.n_imu_samples += 1
                     oT = nT
             except Exception as e:
                 pass
 
-        if len(self.var.imu_data_acc[0])/4 < frame_count:
+        if len(self.var.imu_data_acc[0]) < frame_count*4:
             for i in range(len(self.var.imu_data_acc[0]), frame_count*4):
                 self.var.imu_data_acc[0].append(np.nan)
                 self.var.imu_data_acc[1].append(np.nan)
@@ -151,13 +178,16 @@ class JSON_LOADER:
 
 if __name__ == "__main__":
     folder = sys.argv[1]
-    dataset_folder = '/home/sans/Downloads/gaze_data/'
+    dataset_folder = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
 
     os.chdir(dataset_folder + folder)
     capture = cv2.VideoCapture('scenevideo.mp4')
     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
     dataset = JSON_LOADER(folder)
     print(dataset.POP_GAZE_DATA(frame_count, return_val=True))
+    print(dataset.POP_IMU_DATA(frame_count, cut_short=True, return_val=True))
+    print(len(dataset.var.timestamps_imu), len(dataset.var.imu_data_acc[0]), dataset.var.n_imu_samples,frame_count)
+    print(len(dataset.var.timestamps_gaze), len(dataset.var.gaze_data[0]), dataset.var.n_gaze_samples, frame_count)
     # print(dataset.POP_IMU_DATA(frame_count, cut_short=True, return_val=True))
 # print(utils.get_sample_rate(var.timestamps_imu), len(var.timestamps_imu))
 # print(utils.get_sample_rate(var.timestamps_gaze), len(var.timestamps_gaze))

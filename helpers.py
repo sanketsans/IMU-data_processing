@@ -42,11 +42,15 @@ class ALIGN_DATASET(Dataset):
     def __len__(self):
         return len(self.gaze_data) - 1
 
+    def __getitem__(self, index):
+        return self.per_file_imu[index], self.per_file_gaze[index]
+
 class Helpers:
     def __init__(self, test_folder):
         self.var = RootVariables()
         self.test_folder = test_folder
-
+        _ = os.system('mkdir ' + self.var.root + 'datasets')
+        _ = os.system('mkdir ' + self.var.root + 'datasets/' + test_folder[5:])
         self.dataset = IMU_GAZE_FRAME_DATASET(self.test_folder)
         self.train_imu_dataset, self.test_imu_dataset = self.dataset.imu_train_datasets, self.dataset.imu_test_datasets
         self.train_gaze_dataset, self.test_gaze_dataset = self.dataset.gaze_train_datasets, self.dataset.gaze_test_datasets
@@ -110,27 +114,25 @@ class Helpers:
 
     def load_datasets(self):
         test_folder = self.test_folder
-        _ = os.system('mkdir ' + self.var.root + 'datasets/' + test_folder[5:])
         test_folder  = test_folder + '/' if test_folder[-1]!='/' else  test_folder
         toggle = 0
         frame_training_feat, frame_testing_feat = None, None
         imu_training_feat, imu_testing_feat = None, None
         training_target, testing_target = None, None
 
-        check = True if Path(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_frames_training_feat_' + test_folder[5:] + '.npy').is_file() else False
+        check = True if Path(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_frames_training_feat_' + test_folder[6:-1] + '.npy').is_file() else False
         if check :
-            frame_training_feat = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_frames_training_feat_' + test_folder[5:]  + '.npy', mmap_mode='r')
-            frame_testing_feat = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_frames_testing_feat_' + test_folder[5:]  + '.npy', mmap_mode='r')
-            imu_training_feat = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_training_feat_' + test_folder[5:]  + '.npy', mmap_mode='r')
-            imu_testing_feat = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_testing_feat_' + test_folder[5:]  + '.npy', mmap_mode='r')
-            training_target = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_training_target_' + test_folder[5:]  + '.npy', mmap_mode='r')
-            testing_target = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_testing_target_' + test_folder[5:]  + '.npy', mmap_mode='r')
+            frame_training_feat = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_frames_training_feat_' + test_folder[6:-1]  + '.npy', mmap_mode='r')
+            frame_testing_feat = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_frames_testing_feat_' + test_folder[6:-1]  + '.npy', mmap_mode='r')
+            imu_training_feat = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_training_feat_' + test_folder[6:-1]  + '.npy', mmap_mode='r')
+            imu_testing_feat = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_testing_feat_' + test_folder[6:-1]  + '.npy', mmap_mode='r')
+            training_target = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_training_target_' + test_folder[6:-1]  + '.npy', mmap_mode='r')
+            testing_target = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_testing_target_' + test_folder[6:-1]  + '.npy', mmap_mode='r')
 
         else:
             for index, subDir in enumerate(sorted(os.listdir(self.var.root))):
                 if 'train_' in subDir:
-                    print(subDir)
-                    if test_folder[5:] in subDir:
+                    if test_folder[6:-1] in subDir:
                         if toggle != -1:
                             toggle = -1
                             self.gaze_start_index, self.imu_start_index = 0, 0
@@ -170,6 +172,7 @@ class Helpers:
                         sliced_frame_dataset = np.load(str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy', mmap_mode='r')
                         sliced_imu_dataset = self.train_imu_dataset[self.imu_start_index: self.imu_end_index]
                         sliced_gaze_dataset = self.train_gaze_dataset[self.gaze_start_index: self.gaze_end_index]
+                        print(subDir, sliced_imu_dataset.shape, sliced_gaze_dataset.shape)
                         data = ALIGN_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset)
 
                         if self.train_folders_num > 1:
@@ -180,22 +183,22 @@ class Helpers:
                         self.gaze_start_index = self.gaze_end_index
                         self.imu_start_index = self.imu_end_index
 
-            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_frames_training_feat_' + test_folder[5:] + '.npy', 'wb') as f:
+            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_frames_training_feat_' + test_folder[6:-1] + '.npy', 'wb') as f:
                 np.save(f, frame_training_feat)
                 f.close()
-            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_frames_testing_feat_' + test_folder[5:] + '.npy', 'wb') as f:
+            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_frames_testing_feat_' + test_folder[6:-1] + '.npy', 'wb') as f:
                 np.save(f, frame_testing_feat)
                 f.close()
-            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_training_feat_' + test_folder[5:] + '.npy', 'wb') as f:
+            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_training_feat_' + test_folder[6:-1] + '.npy', 'wb') as f:
                 np.save(f, imu_training_feat)
                 f.close()
-            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_testing_feat_' + test_folder[5:] + '.npy', 'wb') as f:
+            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_testing_feat_' + test_folder[6:-1] + '.npy', 'wb') as f:
                 np.save(f, imu_testing_feat)
                 f.close()
-            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_training_target_' + test_folder[5:] + '.npy', 'wb') as f:
+            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_training_target_' + test_folder[6:-1] + '.npy', 'wb') as f:
                 np.save(f, training_target)
                 f.close()
-            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_testing_target_' + test_folder[5:] + '.npy', 'wb') as f:
+            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_testing_target_' + test_folder[6:-1] + '.npy', 'wb') as f:
                 np.save(f, testing_target)
                 f.close()
 

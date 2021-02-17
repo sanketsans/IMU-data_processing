@@ -128,8 +128,8 @@ if __name__ == "__main__":
     parser.add_argument("--rgb_max", type=float, default=255.)
     args = parser.parse_args()
 
-
-    model_checkpoint = 'pipeline_checkpoint.pth'
+    test_folder = 'train_BookShelf_S1'
+    model_checkpoint = 'pipeline_checkpoint_' + test_folder[6:] + '.pth'
     flownet_checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
     trim_frame_size = 150
     arg = 'del'
@@ -146,7 +146,6 @@ if __name__ == "__main__":
         # pipeline.current_loss = checkpoint['loss']
         print('Model loaded')
 
-    test_folder = 'train_BookShelf_S1'
     utils = Helpers(test_folder)
     frame_training_feat, frame_testing_feat, imu_training, imu_testing, training_target, testing_target = utils.load_datasets()
     imu_training_feat[:, :, 1] += 9.80665

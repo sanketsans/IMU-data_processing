@@ -132,7 +132,7 @@ class BUILDING_DATASETS:
         self.frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
         self.dataset = JSON_LOADER(subDir)
-        self.dataset.POP_IMU_DATA(self.frame_count, cut_short=False)
+        self.dataset.POP_IMU_DATA(self.frame_count, cut_short=True)
         _ = os.system('rm imu_file.csv')
         self.panda_data = {}
         self.create_dataframes(subDir, dframe_type='imu')
