@@ -16,11 +16,11 @@ class BUILDING_DATASETS:
         self.var = RootVariables()
         self.dataset = None
         self.imu_arr_acc, self.imu_arr_gyro, self.gaze_arr = None, None, None
-        self.last = None
+        self.train_last, self.test_last = None, None
         self.train_new, self.test_new = None, None
         temp = None
         self.video_file = 'scenevideo.mp4'
-        self.folders_num = 0
+        self.test_folders_num, self.train_folders_num = 0, 0
         self.frame_count = 0
         self.capture = None
         self.ret = None
@@ -30,10 +30,10 @@ class BUILDING_DATASETS:
 
         self.panda_data = {}
 
-    def populate_gaze_data(self, subDir, toggle=1):
-        if toggle != self.toggle:
-            self.folders_num = 0
-            self.toggle = toggle
+    def populate_gaze_data(self, subDir):
+        # if toggle != self.toggle:
+        #     self.folders_num = 0
+        #     self.toggle = toggle
 
         subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
         print(subDir)
@@ -52,30 +52,30 @@ class BUILDING_DATASETS:
         temp = np.zeros((self.frame_count*4-self.var.trim_frame_size*4*2, 2))
         temp[:,0] = self.gaze_arr[tuple([np.arange(self.var.trim_frame_size*4, self.frame_count*4 - self.var.trim_frame_size*4), [0]])]
         temp[:,1] = self.gaze_arr[tuple([np.arange(self.var.trim_frame_size*4, self.frame_count*4 - self.var.trim_frame_size*4), [1]])]
-
         return temp
 
     def load_unified_gaze_dataset(self):        ## missing data in imu_lift_s1
-        self.folders_num = 0
+        self.test_folders_num, self.train_folders_num = 0, 0
         for index, subDir in enumerate(tqdm(sorted(os.listdir(self.var.root)), desc="Building gaze dataset")):
             if 'train_' in subDir :
-                if self.test_folder[5:] in subDir:
-                    self.temp = self.populate_gaze_data(subDir, -1)
-                    self.folders_num += 1
-                    if self.folders_num > 1:
-                        self.test_new = np.concatenate((self.last, self.temp), axis=0)
-                    else:
-                        self.test_new = self.temp
-                    self.last = self.test_new
-
+                self.temp = self.populate_gaze_data(subDir)
+                self.train_folders_num += 1
+                if self.train_folders_num > 1:
+                    self.train_new = np.concatenate((self.train_last, self.temp), axis=0)
                 else:
-                    self.temp = self.populate_gaze_data(subDir, 1)
-                    self.folders_num += 1
-                    if self.folders_num > 1:
-                        self.train_new = np.concatenate((self.last, self.temp), axis=0)
-                    else:
-                        self.train_new = self.temp
-                    self.last = self.train_new
+                    self.train_new = self.temp
+                self.train_last = self.train_new
+                print(subDir, self.temp[-1], self.train_last[-1])
+
+            if 'test_' in subDir:
+                print('TEST folder: ', self.test_folder)
+                self.temp = self.populate_gaze_data(subDir)
+                self.test_folders_num += 1
+                if self.test_folders_num > 1:
+                    self.test_new = np.concatenate((self.test_last, self.temp), axis=0)
+                else:
+                    self.test_new = self.temp
+                self.test_last = self.test_new
 
         return self.train_new, self.test_new
 
@@ -120,10 +120,10 @@ class BUILDING_DATASETS:
 
         return self.train_new
 
-    def populate_imu_data(self, subDir, toggle=1):
-        if toggle != self.toggle:
-            self.folders_num = 0
-            self.toggle = toggle
+    def populate_imu_data(self, subDir):
+        # if toggle != self.toggle:
+        #     self.folders_num = 0
+        #     self.toggle = toggle
 
         subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
         print(subDir)
@@ -162,23 +162,23 @@ class BUILDING_DATASETS:
     def load_unified_imu_dataset(self):     ## missing data in imu_CoffeeVendingMachine_S2
         for index, subDir in enumerate(tqdm(sorted(os.listdir(self.var.root)), desc="Building IMU dataset")):
             if 'train_' in subDir :
-                if self.test_folder[5:] in subDir:
-                    self.temp = self.populate_imu_data(subDir, -1)
-                    self.folders_num += 1
-                    if self.folders_num > 1:
-                        self.test_new = np.concatenate((self.last, self.temp), axis=0)
-                    else:
-                        self.test_new = self.temp
-                    self.last = self.test_new
-
+                self.temp = self.populate_imu_data(subDir)
+                self.train_folders_num += 1
+                if self.train_folders_num > 1:
+                    self.train_new = np.concatenate((self.train_last, self.temp), axis=0)
                 else:
-                    self.temp = self.populate_imu_data(subDir, 1)
-                    self.folders_num += 1
-                    if self.folders_num > 1:
-                        self.train_new = np.concatenate((self.last, self.temp), axis=0)
-                    else:
-                        self.train_new = self.temp
-                    self.last = self.train_new
+                    self.train_new = self.temp
+                self.train_last = self.train_new
+
+            if 'test_' in subDir:
+                print('TEST folder: ', self.test_folder)
+                self.temp = self.populate_imu_data(subDir)
+                self.test_folders_num += 1
+                if self.test_folders_num > 1:
+                    self.test_new = np.concatenate((self.test_last, self.temp), axis=0)
+                else:
+                    self.test_new = self.temp
+                self.test_last = self.test_new
 
         return self.train_new, self.test_new
 
@@ -213,11 +213,12 @@ if __name__ == "__main__":
     var = RootVariables()
     # dataset_folder = '/Users/sanketsans/Downloads/Pavis_Social_Interaction_Attention_dataset/'
     # os.chdir(dataset_folder)
-    dataframes = BUILDING_DATASETS(var.root, 256, 150)
+    dataframes = BUILDING_DATASETS('train_Lift_S1')
 
-    gaze_datas = dataframes.load_unified_gaze_dataset()
-    imu_datas = dataframes.load_unified_imu_dataset()
-    print(len(imu_datas))
+    trainTar, testTar = dataframes.load_unified_gaze_dataset()
+
+    # trainIMU, testIMU = dataframes.load_unified_imu_dataset()
+    print(trainTar[0], testTar[0])
     # imu_datas= dataframes.load_unified_imu_dataset()
     # plt.subplot(221)
     # _ = plt.hist(imu_datas[:,0], bins='auto', label='before N')

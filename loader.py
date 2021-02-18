@@ -44,6 +44,7 @@ class JSON_LOADER:
         sample_rate = {}
         not_cons_sample_rate = {}
         for sample in samples:
+            # print(sample)
             total_sample += sample - total_sample
             if total_sample > float(curr_bin)+0.99:
                 sample_rate[curr_bin] = count
@@ -71,35 +72,34 @@ class JSON_LOADER:
         nT, oT = 0.0, 0.0
         checked = False
         for data in self.var.gaze_dataList:
-            nT = round(float(data['timestamp']), 2)
+            # nT = round(float(data['timestamp']), 2)
+            nT = self.floor(float(data['timestamp']))
             try:
                 if(float(data['timestamp']) > self.start_timestamp):
                     diff = round(nT - oT, 2)
                     if diff > 1.0 or diff < -0.0 or diff==0.0:
                         continue
 
-                    if diff > 0.01 and checked:
-                        _diff = round(self.floor(float(data['timestamp'])) - oT, 2)
-                        if _diff != 0.01 and diff > 0.01:
-                            diff *= 100
-                            diff = int(diff)
-                            a = [round(oT + 0.01*i, 2) for i in range(1, diff)]
-
-                            self.var.gaze_data[0].extend(repeat(np.nan, diff - 1))
-                            self.var.gaze_data[1].extend(repeat(np.nan, diff - 1))
-                            print(oT, nT, diff, a, _diff)
-                            self.var.timestamps_gaze.extend(a)
-                            self.var.n_gaze_samples += diff - 1
+                    if diff > 0.01 :
+                        # _diff = round(self.floor(float(data['timestamp'])) - oT, 2)
+                        # if _diff != 0.01 and diff > 0.01:
+                        diff *= 100
+                        diff = int(diff)
+                        a = [round(oT + 0.01*i, 2) for i in range(1, diff)]
+                        self.var.gaze_data[0].extend(repeat(np.nan, diff - 1))
+                        self.var.gaze_data[1].extend(repeat(np.nan, diff - 1))
+                        self.var.timestamps_gaze.extend(a)
+                        self.var.n_gaze_samples += diff - 1
 
                     if (0.0 <= float(data['data']['gaze2d'][0]) <= 1.0) and (0.0 <= float(data['data']['gaze2d'][1]) <= 1.0):
                         self.var.gaze_data[0].append(float(data['data']['gaze2d'][0]))
                         self.var.gaze_data[1].append(float(data['data']['gaze2d'][1]))
-                        checked = True
+                        # checked = True
 
                     else:
                         self.var.gaze_data[0].append(np.nan)
                         self.var.gaze_data[1].append(np.nan)
-                        checked = True
+                        # checked = True
 
             except Exception as e:
                 self.var.gaze_data[0].append(np.nan)
@@ -118,16 +118,32 @@ class JSON_LOADER:
                 self.var.gaze_data[1].append(np.nan)
 
         if return_val:
-            return self.get_sample_rate(self.var.timestamps_gaze)
+            return self.get_sample_rate(self.var.timestamps_gaze[0:7057])
 
     def POP_IMU_DATA(self, frame_count, cut_short =True, return_val=False):
         nT, oT = 0.0, 0.0
 
         for index, data in enumerate(self.var.imu_dataList):
+            nT = self.floor(float(data['timestamp']))
             try:
                 if(float(data['timestamp']) > self.start_timestamp):
-                    nT = self.floor(float(data['timestamp']))
                     diff = round((nT - oT), 2)
+
+                    if diff > 0.01 :
+                        diff *= 100
+                        diff = int(diff)
+                        a = [round(oT + 0.01*i, 2) for i in range(1, diff)]
+
+                        self.var.imu_data_acc[0].extend(repeat(np.nan, diff - 1))
+                        self.var.imu_data_acc[1].extend(repeat(np.nan, diff - 1))
+                        self.var.imu_data_acc[2].extend(repeat(np.nan, diff - 1))
+
+                        self.var.imu_data_gyro[0].extend(repeat(np.nan, diff - 1))
+                        self.var.imu_data_gyro[1].extend(repeat(np.nan, diff - 1))
+                        self.var.imu_data_gyro[2].extend(repeat(np.nan, diff - 1))
+                        self.var.timestamps_imu.extend(a)
+                        self.var.n_imu_samples += diff - 1
+
                     self.var.imu_data_acc[0].append(float(data['data']['accelerometer'][0]))
                     self.var.imu_data_acc[1].append(float(data['data']['accelerometer'][1]) ) # + 9.80665
                     self.var.imu_data_acc[2].append(float(data['data']['accelerometer'][2]))
@@ -148,8 +164,6 @@ class JSON_LOADER:
                             self.get_average_remove_dup(self.var.imu_data_gyro[2], -2, -3)
 
                             self.var.timestamps_imu.pop(len(self.var.timestamps_imu) - 3)
-                            # print('Mid point resolved')
-
                             self.var.n_imu_samples -= 1
                             self.var.check_repeat = False
                         elif (diff < 0.01):
@@ -186,7 +200,7 @@ if __name__ == "__main__":
     dataset = JSON_LOADER(folder)
     print(dataset.POP_GAZE_DATA(frame_count, return_val=True))
     print(dataset.POP_IMU_DATA(frame_count, cut_short=True, return_val=True))
-    print(len(dataset.var.timestamps_imu), len(dataset.var.imu_data_acc[0]), dataset.var.n_imu_samples,frame_count)
+    print(len(dataset.var.timestamps_imu), len(dataset.var.imu_data_acc[0]), dataset.var.n_imu_samples,frame_count*4)
     print(len(dataset.var.timestamps_gaze), len(dataset.var.gaze_data[0]), dataset.var.n_gaze_samples, frame_count)
     # print(dataset.POP_IMU_DATA(frame_count, cut_short=True, return_val=True))
 # print(utils.get_sample_rate(var.timestamps_imu), len(var.timestamps_imu))

@@ -33,7 +33,7 @@ class VISION_PIPELINE(nn.Module):
         self.fc1 = nn.Linear(1024*4*4, 4096).to(self.device)
         self.fc2 = nn.Linear(4096, 256).to(self.device)
         self.fc3 = nn.Linear(256, 2).to(self.device)
-        self.dropout = nn.Dropout(0.45)
+        self.dropout = nn.Dropout(0.35)
         self.activation = nn.Sigmoid()
         # self.net[8][1] = nn.ReLU(inplace=False)
         self.net[8] = self.net[8][0]
@@ -41,7 +41,7 @@ class VISION_PIPELINE(nn.Module):
         for params in self.net.parameters():
             params.requires_grad = True
 
-        self.tensorboard_folder = 'frmae' #'BLSTM_signal_outputs_sell1/'
+        self.tensorboard_folder = 'vision_SGD' #'BLSTM_signal_outputs_sell1/'
 
     def get_num_correct(self, pred, label):
         return torch.logical_and((torch.abs(pred[:,0]*1920-label[:,0]*1920) <= 100.0), (torch.abs(pred[:,1]*1080-label[:,1]*1080) <= 100.0)).sum().item()
@@ -75,7 +75,8 @@ if __name__ == "__main__":
     parser.add_argument("--rgb_max", type=float, default=255.)
     args = parser.parse_args()
 
-    model_checkpoint = 'vision_pipeline_checkpoint.pth'
+    test_folder = 'train_BookShelf_S1'
+    model_checkpoint = 'vision_checkpoint_' + test_folder[6:] + '.pth'
     flownet_checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
 
     arg = 'del'
@@ -84,27 +85,27 @@ if __name__ == "__main__":
     trim_frame_size = 150
     pipeline = VISION_PIPELINE(args, flownet_checkpoint, device)
 
-    optimizer = optim.Adam(pipeline.parameters(), lr=1e-4)
+    optimizer = optim.SGD(pipeline.parameters(), lr=1e-4, momentum=0.9)
     criterion = nn.L1Loss()
-    utils = Helpers()
 
-    if Path(pipeline.var.root + model_checkpoint).is_file():
+    if Path(pipeline.var.root + 'datasets/' + test_folder[5:] + '/' + model_checkpoint).is_file():
         checkpoint = torch.load(pipeline.var.root + model_checkpoint)
         pipeline.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         # pipeline.current_loss = checkpoint['loss']
         print('Model loaded')
 
+    utils = Helpers(test_folder)
     frame_training_feat, frame_testing_feat, _, _, training_target, testing_target = utils.load_datasets()
-
+    print(training_target[0], testing_target[0])
     os.chdir(pipeline.var.root)
 
     for epoch in tqdm(range(n_epochs), desc="epochs"):
         trainDataset = FINAL_DATASET(frame_training_feat, training_target)
-        trainLoader = torch.utils.data.DataLoader(trainDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=4)
+        trainLoader = torch.utils.data.DataLoader(trainDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=0)
         tqdm_trainLoader = tqdm(trainLoader)
         testDataset = FINAL_DATASET(frame_testing_feat, testing_target)
-        testLoader = torch.utils.data.DataLoader(testDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=4)
+        testLoader = torch.utils.data.DataLoader(testDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=0)
         tqdm_testLoader = tqdm(testLoader)
 
         num_samples = 0
@@ -114,7 +115,7 @@ if __name__ == "__main__":
             num_samples += feat.size(0)
             labels = labels[:,0,:]
             pred = pipeline(feat.float()).to(device)
-            loss = criterion(pred*1000.0, (labels*1000.0).float())
+            loss = criterion(pred, labels.float())
             total_loss += loss.item()
             total_correct += pipeline.get_num_correct(pred, labels.float())
             total_accuracy = total_correct / num_samples
@@ -126,9 +127,9 @@ if __name__ == "__main__":
 
         if epoch == 0 and 'del' in arg:
             # _ = os.system('mv runs new_backup')
-            _ = os.system('rm -rf runs/' + pipeline.tensorboard_folder)
+            _ = os.system('rm -rf ' + pipeline.var.root + 'datasets/' + test_folder[5:] + '/runs/' + pipeline.tensorboard_folder)
 
-        tb = SummaryWriter('runs/' + pipeline.tensorboard_folder)
+        tb = SummaryWriter(pipeline.var.root + 'datasets/' + test_folder[5:] + '/runs/' + pipeline.tensorboard_folder)
         tb.add_scalar("Train Loss", total_loss / num_samples, epoch)
         tb.add_scalar("Training Correct", total_correct, epoch)
         tb.add_scalar("Train Accuracy", total_accuracy, epoch)
@@ -141,7 +142,7 @@ if __name__ == "__main__":
                 num_samples += feat.size(0)
                 labels = labels[:,0,:]
                 pred = pipeline(feat.float()).to(device)
-                loss = criterion(pred*1000.0, (labels*1000.0).float())
+                loss = criterion(pred, labels.float())
                 total_loss += loss.item()
                 total_correct += pipeline.get_num_correct(pred, labels.float())
                 total_accuracy = total_correct / num_samples
@@ -158,5 +159,5 @@ if __name__ == "__main__":
                         'epoch': epoch,
                         'model_state_dict': pipeline.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
-                        }, pipeline.var.root + model_checkpoint)
+                        }, pipeline.var.root + 'datasets/' + test_folder[5:] + '/' + model_checkpoint)
             print('Model saved')

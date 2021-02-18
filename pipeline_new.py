@@ -139,7 +139,7 @@ if __name__ == "__main__":
     optimizer = optim.SGD(pipeline.parameters(), lr=1e-4, momentum=0.9)
     criterion = nn.L1Loss()
     print(pipeline)
-    if Path(pipeline.var.root + model_checkpoint).is_file():
+    if Path(pipeline.var.root + 'datasets/' + test_folder[5:] + '/' + model_checkpoint).is_file():
         checkpoint = torch.load(pipeline.var.root + model_checkpoint)
         pipeline.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -148,21 +148,21 @@ if __name__ == "__main__":
 
     utils = Helpers(test_folder)
     frame_training_feat, frame_testing_feat, imu_training, imu_testing, training_target, testing_target = utils.load_datasets()
-    imu_training_feat[:, :, 1] += 9.80665
 
     os.chdir(pipeline.var.root)
     imu_training_feat = np.copy(imu_training)
     imu_testing_feat = np.copy(imu_testing)
     imu_training_feat[:, :, 1] += 9.80665
+    imu_testing_feat[:, :, 1] += 9.80665
     imu_training_feat = utils.standarization(imu_training_feat)
     imu_testing_feat = utils.standarization(imu_testing_feat)
 
     for epoch in tqdm(range(n_epochs), desc="epochs"):
         trainDataset = FINAL_DATASET(frame_training_feat, imu_training_feat, training_target)
-        trainLoader = torch.utils.data.DataLoader(trainDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=4)
+        trainLoader = torch.utils.data.DataLoader(trainDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=0)
         tqdm_trainLoader = tqdm(trainLoader)
         testDataset = FINAL_DATASET(frame_testing_feat, imu_testing_feat, testing_target)
-        testLoader = torch.utils.data.DataLoader(testDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=4)
+        testLoader = torch.utils.data.DataLoader(testDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=0)
         tqdm_testLoader = tqdm(testLoader)
 
         num_samples = 0
@@ -172,12 +172,12 @@ if __name__ == "__main__":
             num_samples += frame_feat.size(0)
             labels = labels[:,0,:]
             pred = pipeline(frame_feat, imu_feat).to(device)
-            imuPred = pipeline.activation(pipeline.imuRegressor(pipeline.imuModel(imu_feat.float()))).to(device)
-            framePred = pipeline.activation(pipeline.frameRegressor(pipeline.frameModel(frame_feat.float()))).to(device)
+            # imuPred = pipeline.activation(pipeline.imuRegressor(pipeline.imuModel(imu_feat.float()))).to(device)
+            # framePred = pipeline.activation(pipeline.frameRegressor(pipeline.frameModel(frame_feat.float()))).to(device)
             combLoss = criterion(pred, labels.float())
-            imuLoss = criterion(imuPred, labels.float())
-            frameLoss = criterion(framePred, labels.float())
-            loss = combLoss + imuLoss + frameLoss
+            # imuLoss = criterion(imuPred, labels.float())
+            # frameLoss = criterion(framePred, labels.float())
+            loss = combLoss #+ imuLoss + frameLoss
             total_loss += loss.item()
             total_correct += pipeline.get_num_correct(pred, labels.float())
             total_accuracy = total_correct / num_samples
@@ -190,7 +190,7 @@ if __name__ == "__main__":
 
         if epoch == 0 and 'del' in arg:
             # _ = os.system('mv runs new_backup')
-            _ = os.system('rm -rf runs/' + pipeline.tensorboard_folder)
+            _ = os.system('rm -rf ' + pipeline.var.root + 'datasets/' + test_folder[5:] + '/runs/' + pipeline.tensorboard_folder)
 
         tb = SummaryWriter(pipeline.var.root + 'datasets/' + test_folder[5:] + '/runs/' + pipeline.tensorboard_folder)
         tb.add_scalar("Train Loss", total_loss / num_samples, epoch)
@@ -205,12 +205,12 @@ if __name__ == "__main__":
                 num_samples += frame_feat.size(0)
                 labels = labels[:,0,:]
                 pred = pipeline(frame_feat, imu_feat).to(device)
-                imuPred = pipeline.activation(pipeline.imuRegressor(pipeline.imuModel(imu_feat.float()))).to(device)
-                framePred = pipeline.activation(pipeline.frameRegressor(pipeline.frameModel(frame_feat.float()))).to(device)
+                # imuPred = pipeline.activation(pipeline.imuRegressor(pipeline.imuModel(imu_feat.float()))).to(device)
+                # framePred = pipeline.activation(pipeline.frameRegressor(pipeline.frameModel(frame_feat.float()))).to(device)
                 combLoss = criterion(pred, labels.float())
-                imuLoss = criterion(imuPred, labels.float())
-                frameLoss = criterion(framePred, labels.float())
-                loss = combLoss + imuLoss + frameLoss
+                # imuLoss = criterion(imuPred, labels.float())
+                # frameLoss = criterion(framePred, labels.float())
+                loss = combLoss #+ imuLoss + frameLoss
                 total_loss += loss.item()
                 total_correct += pipeline.get_num_correct(pred, labels.float())
                 total_accuracy = total_correct / num_samples
@@ -227,7 +227,7 @@ if __name__ == "__main__":
                         'epoch': epoch,
                         'model_state_dict': pipeline.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
-                        }, pipeline.var.root + model_checkpoint)
+                        }, pipeline.var.root + 'datasets/' + test_folder[5:] + '/' + model_checkpoint)
             print('Model saved')
 
     # optimizer = optim.Adam([
