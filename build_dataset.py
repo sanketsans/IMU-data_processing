@@ -65,7 +65,7 @@ class BUILDING_DATASETS:
                 else:
                     self.train_new = self.temp
                 self.train_last = self.train_new
-                print(subDir, self.temp[-1], self.train_last[-1])
+                print(subDir, len(self.train_last.reshape(-1, 4, 2)))
 
             if 'test_' in subDir:
                 print('TEST folder: ', self.test_folder)
@@ -76,49 +76,95 @@ class BUILDING_DATASETS:
                 else:
                     self.test_new = self.temp
                 self.test_last = self.test_new
+                print(subDir, len(self.test_last.reshape(-1, 4, 2)))
 
         return self.train_new, self.test_new
 
-    def load_unified_frame_dataset(self):
+    def load_unified_frame_dataset(self, reset_dataset):
         ## INCLUDES THE LAST FRAME
-        self.folders_num = 0
-        for index, subDir in enumerate(tqdm(sorted(os.listdir(self.var.root)), desc="Building Image Dataset")):
-            if 'train_' in subDir or 'val_' in subDir or 'test_' in subDir:
-                total_frames = 0
-                self.folders_num += 1
-                subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
-                os.chdir(self.var.root + subDir)
-                self.capture = cv2.VideoCapture(self.video_file)
-                self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                if not Path(str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy').is_file():
-                    print(subDir)
-                    # _ = os.system('rm framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy')
+        if reset_dataset == 1:
+            print('Deleting the old dataset .. ')
+            _ = os.system('rm -r training_images')
+            _ = os.system('rm -r testing_images')
+
+            _ = os.system('mkdir ' + self.var.root + 'training_images')
+            _ = os.system('mkdir ' + self.var.root + 'testing_images')
+            train_frame_index, test_frame_index = 0, 0
+            for index, subDir in enumerate(tqdm(sorted(os.listdir(self.var.root)), desc="Building Image Dataset")):
+                if 'train_' in subDir:
+                    total_frames = 0
+                    subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
                     os.chdir(self.var.root + subDir)
                     self.capture = cv2.VideoCapture(self.video_file)
                     self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
+                    if not Path(str(self.var.frame_size) + '_framesExtracted_data_AA' + str(self.var.trim_frame_size) + '.npy').is_file():
+                        print('Train: ', subDir)
+                        # _ = os.system('rm ' + str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy')
+                        os.chdir(self.var.root + subDir)
+                        self.capture = cv2.VideoCapture(self.video_file)
+                        self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
-                    self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.var.trim_frame_size)
-                    self.ret, self.last = self.capture.read()
-                    self.last = cv2.cvtColor(self.last, cv2.COLOR_BGR2RGB)
-                    self.last = cv2.resize(self.last, (self.var.frame_size, self.var.frame_size))
-                    total_frames = 1
-                    while self.ret:
-                        if total_frames == (self.frame_count - self.var.trim_frame_size*2):
-                            break
-                        self.ret, self.train_new = self.capture.read()
-                        self.train_new = cv2.cvtColor(self.train_new, cv2.COLOR_BGR2RGB)
-                        self.train_new = cv2.resize(self.train_new, (self.var.frame_size, self.var.frame_size))
-                        total_frames += 1
-                        self.stack_frames.append(np.concatenate((self.last, self.train_new), axis=2))
-                        self.last = self.train_new
+                        self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.var.trim_frame_size)
+                        self.ret, self.last = self.capture.read()
+                        _ = os.system('rm -rf images')
+                        # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.last)
+                        self.last = cv2.resize(self.last, (512, 384))
+                        total_frames = 1
+                        # train_frame_index += 1
+                        while total_frames != (self.frame_count - self.var.trim_frame_size*2):
+                            self.ret, self.train_new = self.capture.read()
+                            # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.train_new)
+                            self.train_new = cv2.resize(self.train_new, (512, 384))
+                            stacked = np.concatenate((self.last, self.train_new), axis=2)
+                            with open(self.var.root + 'training_images/frames_' + str(train_frame_index) + '.npy', 'wb') as f:
+                                np.save(f, stacked)
+                                f.close()
 
-                    with open(self.var.root + subDir + str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy', 'wb') as f:
-                        np.save(f, self.stack_frames)
-                        f.close()
+                            total_frames += 1
+                            train_frame_index += 1
+                            # self.stack_frames.append(stacked)
+                            self.last = self.train_new
 
-                    self.stack_frames = []
+                        # with open(self.var.root + subDir + str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy', 'wb') as f:
+                        #     np.save(f, self.stack_frames)
+                        #     f.close()
 
-        return self.train_new
+                        # self.stack_frames = []
+
+                if 'test_' in subDir:
+                    total_frames = 0
+                    subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+                    os.chdir(self.var.root + subDir)
+                    self.capture = cv2.VideoCapture(self.video_file)
+                    self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
+                    if not Path(str(self.var.frame_size) + '_framesExtracted_data_AA' + str(self.var.trim_frame_size) + '.npy').is_file():
+                        print('Test: ', subDir)
+                        # _ = os.system('rm ' + str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy')
+                        os.chdir(self.var.root + subDir)
+                        self.capture = cv2.VideoCapture(self.video_file)
+                        self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
+
+                        self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.var.trim_frame_size)
+                        self.ret, self.last = self.capture.read()
+                        _ = os.system('rm -rf images')
+                        # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.last)
+                        self.last = cv2.resize(self.last, (512, 384))
+                        total_frames = 1
+                        # test_frame_index += 1
+                        while total_frames != (self.frame_count - self.var.trim_frame_size*2):
+                            self.ret, self.train_new = self.capture.read()
+                            # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.train_new)
+                            self.train_new = cv2.resize(self.train_new, (512, 384))
+                            stacked = np.concatenate((self.last, self.train_new), axis=2)
+                            with open(self.var.root + 'testing_images/frames_' + str(test_frame_index) + '.npy', 'wb') as f:
+                                np.save(f, stacked)
+                                f.close()
+
+                            total_frames += 1
+                            test_frame_index += 1
+                            # self.stack_frames.append(stacked)
+                            self.last = self.train_new
+
 
     def populate_imu_data(self, subDir):
         # if toggle != self.toggle:
@@ -215,10 +261,9 @@ if __name__ == "__main__":
     # os.chdir(dataset_folder)
     dataframes = BUILDING_DATASETS('train_Lift_S1')
 
-    trainTar, testTar = dataframes.load_unified_gaze_dataset()
+    dataframes.load_unified_frame_dataset()
 
     # trainIMU, testIMU = dataframes.load_unified_imu_dataset()
-    print(trainTar[0], testTar[0])
     # imu_datas= dataframes.load_unified_imu_dataset()
     # plt.subplot(221)
     # _ = plt.hist(imu_datas[:,0], bins='auto', label='before N')

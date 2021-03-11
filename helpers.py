@@ -5,37 +5,68 @@ import numpy as np
 from prepare_dataset import IMU_GAZE_FRAME_DATASET
 from pathlib import Path
 
+# class ALIGN_DATASET(Dataset):
+#     def __init__(self, frame_data, imu_data, gaze_data):
+#         self.frame_data = frame_data
+#         self.imu_data = imu_data
+#         self.gaze_data = gaze_data
+#         self.per_file_frame = []
+#         self.per_file_imu = []
+#         self.per_file_gaze = []
+#         checkedLast = False
+#         for i in range(len(self.gaze_data) - 2):
+#             index = i + 1
+#             while True:
+#                 check = np.isnan(self.gaze_data[index])
+#                 imu_index = 75 + index
+#                 catIMUData = self.imu_data[imu_index-15]
+#                 for i in range(15):
+#                     catIMUData = np.concatenate((catIMUData, self.imu_data[imu_index-14+i]), axis=0)
+#                 for i in range(1, 6):
+#                     catIMUData = np.concatenate((catIMUData, self.imu_data[imu_index+i]), axis=0)
+#                 imu_check = np.isnan(catIMUData)
+#
+#                 if check.any() or imu_check.any():
+#                     index = (index - 1) if checkedLast else (index + 1)
+#                     if index == self.__len__():
+#                         checkedLast = True
+#                 else:
+#                     break
+#
+#
+#             self.per_file_frame.append(self.frame_data[index-1])
+#             self.per_file_imu.append(catIMUData)
+#             self.per_file_gaze.append(self.gaze_data[index])
+#
+#         self.per_file_frame = np.array(self.per_file_frame)
+#         self.per_file_imu = np.array(self.per_file_imu)
+#         self.per_file_gaze = np.array(self.per_file_gaze)
+#
+#     def __len__(self):
+#         return len(self.gaze_data) - 1
+#
+#     def __getitem__(self, index):
+#         return self.per_file_imu[index], self.per_file_gaze[index]
+
 class ALIGN_DATASET(Dataset):
-    def __init__(self, frame_data, imu_data, gaze_data):
-        self.frame_data = frame_data
+    def __init__(self, imu_data, gaze_data):
         self.imu_data = imu_data
         self.gaze_data = gaze_data
-        self.per_file_frame = []
         self.per_file_imu = []
         self.per_file_gaze = []
         checkedLast = False
-        for i in range(len(self.gaze_data) - 2):
+        for i in range(len(self.gaze_data)-1):
             index = i + 1
-            while True:
-                check = np.isnan(self.gaze_data[index])
-                if check.any():
-                    index = (index - 1) if checkedLast else (index + 1)
-                    if index == self.__len__():
-                        checkedLast = True
-                else:
-                    break
             imu_index = 75 + index
             catIMUData = self.imu_data[imu_index-15]
             for i in range(15):
                 catIMUData = np.concatenate((catIMUData, self.imu_data[imu_index-14+i]), axis=0)
-            for i in range(1, 16):
+            for i in range(1, 6):
                 catIMUData = np.concatenate((catIMUData, self.imu_data[imu_index+i]), axis=0)
 
-            self.per_file_frame.append(self.frame_data[index-1])
             self.per_file_imu.append(catIMUData)
             self.per_file_gaze.append(self.gaze_data[index])
 
-        self.per_file_frame = np.array(self.per_file_frame)
         self.per_file_imu = np.array(self.per_file_imu)
         self.per_file_gaze = np.array(self.per_file_gaze)
 
@@ -46,12 +77,12 @@ class ALIGN_DATASET(Dataset):
         return self.per_file_imu[index], self.per_file_gaze[index]
 
 class Helpers:
-    def __init__(self, test_folder):
+    def __init__(self, test_folder, reset_dataset=0):
         self.var = RootVariables()
         self.test_folder = test_folder
         _ = os.system('mkdir ' + self.var.root + 'datasets')
         _ = os.system('mkdir ' + self.var.root + 'datasets/' + test_folder[5:])
-        self.dataset = IMU_GAZE_FRAME_DATASET(self.test_folder)
+        self.dataset = IMU_GAZE_FRAME_DATASET(self.test_folder, reset_dataset)
         self.train_imu_dataset, self.test_imu_dataset = self.dataset.imu_train_datasets, self.dataset.imu_test_datasets
         self.train_gaze_dataset, self.test_gaze_dataset = self.dataset.gaze_train_datasets, self.dataset.gaze_test_datasets
 
@@ -85,9 +116,39 @@ class Helpers:
 
     def load_datasets_folder(self, folder_name):
         frames, imu, gaze = None, None, None
+        toggle = 0
         self.gaze_start_index, self.imu_start_index = 0, 0
         for index, subDir in enumerate(sorted(os.listdir(self.var.root))):
             if 'train_' in subDir:
+                if toggle != 1:
+                    toggle = 1
+                    self.gaze_start_index, self.imu_start_index = 0, 0
+
+                subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
+                os.chdir(self.var.root + subDir)
+                capture = cv2.VideoCapture('scenevideo.mp4')
+                frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+                self.gaze_end_index = self.gaze_start_index + frame_count - self.var.trim_frame_size*2
+                self.imu_end_index = self.imu_start_index + frame_count - self.var.trim_frame_size
+                sliced_gaze_dataset = self.train_gaze_dataset[self.gaze_start_index: self.gaze_end_index]
+
+                if folder_name[6:] in subDir:
+                    print(folder_name)
+                    sliced_frame_dataset = np.load(str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy', mmap_mode='r')
+                    sliced_imu_dataset = self.train_imu_dataset[self.imu_start_index: self.imu_end_index]
+                    sliced_gaze_dataset = self.train_gaze_dataset[self.gaze_start_index: self.gaze_end_index]
+                    # data = ALIGN_DATASET(sliced_imu_dataset, sliced_gaze_dataset)
+                    # imu, gaze = data.per_file_imu, data.per_file_gaze
+                    gaze = sliced_gaze_dataset
+                    break
+
+                self.gaze_start_index = self.gaze_end_index
+                self.imu_start_index = self.imu_end_index
+
+            elif 'test_' in subDir:
+                if toggle != -1:
+                    toggle = -1
+                    self.gaze_start_index, self.imu_start_index = 0, 0
 
                 subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
                 os.chdir(self.var.root + subDir)
@@ -99,40 +160,45 @@ class Helpers:
                 if folder_name[6:] in subDir:
                     print(folder_name)
                     sliced_frame_dataset = np.load(str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy', mmap_mode='r')
-                    sliced_imu_dataset = self.train_imu_dataset[self.imu_start_index: self.imu_end_index]
-                    sliced_gaze_dataset = self.train_gaze_dataset[self.gaze_start_index: self.gaze_end_index]
-                    data = ALIGN_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset)
-                    frames, imu, gaze = data.per_file_frame, data.per_file_imu, data.per_file_gaze
-                    print(sliced_gaze_dataset[0])
+                    sliced_imu_dataset = self.test_imu_dataset[self.imu_start_index: self.imu_end_index]
+                    sliced_gaze_dataset = self.test_gaze_dataset[self.gaze_start_index: self.gaze_end_index]
+                    # data = ALIGN_DATASET(sliced_imu_dataset, sliced_gaze_dataset)
+                    # imu, gaze = data.per_file_imu, data.per_file_gaze
+                    gaze = sliced_gaze_dataset
                     break
 
                 self.gaze_start_index = self.gaze_end_index
                 self.imu_start_index = self.imu_end_index
 
-        return frames, imu, gaze
+
+        return gaze
 
     def load_datasets(self):
         test_folder = self.test_folder
         test_folder  = test_folder + '/' if test_folder[-1]!='/' else  test_folder
         toggle = 0
-        frame_training_feat, frame_testing_feat = None, None
         imu_training_feat, imu_testing_feat = None, None
         training_target, testing_target = None, None
 
-        check = True if Path(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_frames_training_feat_' + test_folder[6:-1] + '.npy').is_file() else False
+        _ = os.system('rm ' + self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_training_feat_' + test_folder[5:-1]  + '.npy')
+        _ = os.system('rm ' + self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_testing_feat_' + test_folder[5:-1]  + '.npy')
+        _ = os.system('rm ' + self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_training_target_' + test_folder[5:-1]  + '.npy')
+        _ = os.system('rm ' + self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_testing_target_' + test_folder[5:-1]  + '.npy')
+
+        check = True if Path(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_training_feat_' + test_folder[5:-1] + '.npy').is_file() else False
         if check :
-            frame_training_feat = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_frames_training_feat_' + test_folder[6:-1]  + '.npy', mmap_mode='r')
-            frame_testing_feat = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_frames_testing_feat_' + test_folder[6:-1]  + '.npy', mmap_mode='r')
-            imu_training_feat = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_training_feat_' + test_folder[6:-1]  + '.npy', mmap_mode='r')
-            imu_testing_feat = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_testing_feat_' + test_folder[6:-1]  + '.npy', mmap_mode='r')
-            training_target = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_training_target_' + test_folder[6:-1]  + '.npy', mmap_mode='r')
-            testing_target = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_testing_target_' + test_folder[6:-1]  + '.npy', mmap_mode='r')
+            imu_training_feat = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_training_feat_' + test_folder[5:-1]  + '.npy')
+            imu_testing_feat = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_testing_feat_' + test_folder[5:-1]  + '.npy')
+            training_target = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_training_target_' + test_folder[5:-1]  + '.npy')
+            testing_target = np.load(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_testing_target_' + test_folder[5:-1]  + '.npy')
 
         else:
             for index, subDir in enumerate(sorted(os.listdir(self.var.root))):
                 if 'train_' in subDir:
-                    self.gaze_start_index, self.imu_start_index = 0, 0
-
+                    if toggle != 1:
+                        toggle = 1
+                        self.gaze_start_index, self.imu_start_index = 0, 0
+                    print(subDir)
                     self.train_folders_num += 1
                     subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
                     os.chdir(self.var.root + subDir)
@@ -140,22 +206,22 @@ class Helpers:
                     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
                     self.gaze_end_index = self.gaze_start_index + frame_count - self.var.trim_frame_size*2
                     self.imu_end_index = self.imu_start_index + frame_count - self.var.trim_frame_size
-                    sliced_frame_dataset = np.load(str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy', mmap_mode='r')
                     sliced_imu_dataset = self.train_imu_dataset[self.imu_start_index: self.imu_end_index]
                     sliced_gaze_dataset = self.train_gaze_dataset[self.gaze_start_index: self.gaze_end_index]
-                    print(subDir, sliced_imu_dataset.shape, sliced_gaze_dataset.shape)
-                    data = ALIGN_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset)
+                    data = ALIGN_DATASET(sliced_imu_dataset, sliced_gaze_dataset)
 
                     if self.train_folders_num > 1:
-                        frame_training_feat, imu_training_feat, training_target = np.concatenate((frame_training_feat, data.per_file_frame), axis=0),np.concatenate((imu_training_feat, data.per_file_imu), axis=0),np.concatenate((training_target, data.per_file_gaze), axis=0)
+                        imu_training_feat, training_target = np.concatenate((imu_training_feat, data.per_file_imu), axis=0),np.concatenate((training_target, data.per_file_gaze), axis=0)
                     else:
-                        frame_training_feat, imu_training_feat, training_target = data.per_file_frame, data.per_file_imu, data.per_file_gaze
+                        imu_training_feat, training_target = data.per_file_imu, data.per_file_gaze
 
                     self.gaze_start_index = self.gaze_end_index
                     self.imu_start_index = self.imu_end_index
 
                 elif 'test_' in subDir:
-                    self.gaze_start_index, self.imu_start_index = 0, 0
+                    if toggle != -1:
+                        toggle = -1
+                        self.gaze_start_index, self.imu_start_index = 0, 0
 
                     self.test_folders_num += 1
                     subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
@@ -164,40 +230,34 @@ class Helpers:
                     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
                     self.gaze_end_index = self.gaze_start_index + frame_count - self.var.trim_frame_size*2
                     self.imu_end_index = self.imu_start_index + frame_count - self.var.trim_frame_size
-                    sliced_frame_dataset = np.load(str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy', mmap_mode='r')
                     sliced_imu_dataset = self.test_imu_dataset[self.imu_start_index: self.imu_end_index]
                     sliced_gaze_dataset = self.test_gaze_dataset[self.gaze_start_index: self.gaze_end_index]
-                    data = ALIGN_DATASET(sliced_frame_dataset, sliced_imu_dataset, sliced_gaze_dataset)
+                    data = ALIGN_DATASET(sliced_imu_dataset, sliced_gaze_dataset)
 
                     if self.test_folders_num > 1:
-                        frame_testing_feat, imu_testing_feat, testing_target = np.concatenate((frame_testing_feat, data.per_file_frame), axis=0),np.concatenate((imu_testing_feat, data.per_file_imu), axis=0),np.concatenate((testing_target, data.per_file_gaze), axis=0)
+                        imu_testing_feat, testing_target = np.concatenate((imu_testing_feat, data.per_file_imu), axis=0),np.concatenate((testing_target, data.per_file_gaze), axis=0)
                     else:
-                        frame_testing_feat, imu_testing_feat, testing_target = data.per_file_frame, data.per_file_imu, data.per_file_gaze
+                        imu_testing_feat, testing_target = data.per_file_imu, data.per_file_gaze
 
                     self.gaze_start_index = self.gaze_end_index
                     self.imu_start_index = self.imu_end_index
 
-
-            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_frames_training_feat_' + test_folder[6:-1] + '.npy', 'wb') as f:
-                np.save(f, frame_training_feat)
-                f.close()
-            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_frames_testing_feat_' + test_folder[6:-1] + '.npy', 'wb') as f:
-                np.save(f, frame_testing_feat)
-                f.close()
-            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_training_feat_' + test_folder[6:-1] + '.npy', 'wb') as f:
+            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_training_feat_' + test_folder[5:-1] + '.npy', 'wb') as f:
                 np.save(f, imu_training_feat)
                 f.close()
-            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_testing_feat_' + test_folder[6:-1] + '.npy', 'wb') as f:
+            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_testing_feat_' + test_folder[5:-1] + '.npy', 'wb') as f:
                 np.save(f, imu_testing_feat)
                 f.close()
-            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_training_target_' + test_folder[6:-1] + '.npy', 'wb') as f:
+            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_training_target_' + test_folder[5:-1] + '.npy', 'wb') as f:
                 np.save(f, training_target)
                 f.close()
-            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_testing_target_' + test_folder[6:-1] + '.npy', 'wb') as f:
+            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_testing_target_' + test_folder[5:-1] + '.npy', 'wb') as f:
                 np.save(f, testing_target)
                 f.close()
 
-        return frame_training_feat, frame_testing_feat, imu_training_feat, imu_testing_feat, training_target, testing_target
+        return imu_training_feat, imu_testing_feat, training_target, testing_target
 
 if __name__ == "__main__":
-    utils = Helpers()
+    utils = Helpers('test_Lift_S1')
+    _, _, t, te = utils.load_datasets()
+    print(len(t), len(te))

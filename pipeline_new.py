@@ -12,88 +12,66 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 import argparse
 from tqdm import tqdm
-from encoder_imu import IMU_ENCODER, TEMP_ENCODER
-from encoder_vis import VIS_ENCODER
+sys.path.append('../')
+from pipeline_encoders import IMU_ENCODER, TEMP_ENCODER, VIS_ENCODER
 from helpers import Helpers
-# from getDataset import FRAME_IMU_DATASET
+from FlowNetPytorch.models import FlowNetS
 from variables import RootVariables
 from torch.utils.tensorboard import SummaryWriter
 
 class FusionPipeline(nn.Module):
-    def __init__(self, args, checkpoint, trim_frame_size=150, device=None):
+    def __init__(self, checkpoint, test_folder, device=None):
         super(FusionPipeline, self).__init__()
         torch.manual_seed(2)
         self.device = device
         self.var = RootVariables()
         self.checkpoint_path = self.var.root + checkpoint
         self.activation = nn.Sigmoid()
-        self.temporalSeq = 8
+        self.temporalSeq = 16
         self.temporalSize = 8
-        self.trim_frame_size = trim_frame_size
-        self.imuCheckpoint_file = 'signal_pipeline_checkpoint.pth'
-        self.frameCheckpoint_file = 'vision_pipeline_checkpoint.pth'
+        self.trim_frame_size = 150
+        self.imuCheckpoint_file = 'signal_checkpoint0_' + test_folder[5:] + '.pth'
+        self.frameCheckpoint_file = 'vision_checkpoint_' + test_folder[5:] +'.pth'
 
         ## IMU Models
-        self.imuModel = IMU_ENCODER(self.var.imu_input_size, self.device)
-        # imuCheckpoint = torch.load(self.var.root + self.imuCheckpoint_file)
-        # self.imuModel.load_state_dict(imuCheckpoint['model_state_dict'])
+        self.imuModel = IMU_ENCODER()
+        imuCheckpoint = torch.load(self.var.root + 'datasets/' + test_folder[5:] + '/' + self.imuCheckpoint_file)
+        self.imuModel.load_state_dict(imuCheckpoint['model_state_dict'])
         for params in self.imuModel.parameters():
             params.requires_grad = True
-        # self.imuRegressor = nn.Linear(self.var.hidden_size*2, 2).to(self.device)
 
         ## FRAME MODELS
-        self.args = args
-        self.frameModel =  VIS_ENCODER(self.args, self.checkpoint_path, self.device)
-        # frameCheckpoint = torch.load(self.var.root + self.frameCheckpoint_file)
-        # self.frameModel.load_state_dict(frameCheckpoint['model_state_dict'])
+        self.frameModel =  VIS_ENCODER(self.checkpoint_path, self.device)
+        frameCheckpoint = torch.load(self.var.root + 'datasets/' + test_folder[5:] + '/' + self.frameCheckpoint_file)
+        self.frameModel.load_state_dict(frameCheckpoint['model_state_dict'])
         for params in self.frameModel.parameters():
             params.requires_grad = True
-        # self.frameRegressor = nn.Linear(256, 2).to(self.device)
 
         ## TEMPORAL MODELS
         self.temporalModel = TEMP_ENCODER(self.temporalSize, self.device)
 
-        self.downsample_fc = nn.Linear(256, self.var.hidden_size*2).to(self.device)
         self.fc1 = nn.Linear(self.var.hidden_size*2, 2).to(self.device)
         self.dropuot = nn.Dropout(0.45)
-        # self.fc2 = nn.Linear(128, 2).to(self.device)
-        # self.fusionLayer_sv = nn.Linear(512, 256).to(self.device)
-        # self.fusionLayer_si = nn.Linear(512, 256).to(self.device)
-        # self.finalFusion = nn.Linear(512, 256).to(self.device)
 
         ##OTHER
         self.imu_encoder_params = None
         self.frame_encoder_params = None
 
-        self.tensorboard_folder = 'pipeline_SGD' #'batch_64_Signal_outputs/'
+        self.tensorboard_folder = 'pipeline_Adam' #'batch_64_Signal_outputs/'
 
     def get_encoder_params(self, imu_BatchData, frame_BatchData):
         self.imu_encoder_params = self.imuModel(imu_BatchData.float()).to(self.device)
         self.frame_encoder_params = self.frameModel(frame_BatchData.float()).to(self.device)
-        #self.imuModel_h0, self.imuModel_c0 = h0.detach(), c0.detach()
 
         return self.imu_encoder_params, self.frame_encoder_params
 
     def fusion_network(self, imu_params, frame_params):
-        downsample_frame_params = F.relu(self.downsample_fc(frame_params)).to(self.device)
-        return torch.cat((downsample_frame_params, imu_params), dim=1).to(self.device)
-
-        # sv = self.activation(self.fusionLayer_sv(torch.cat((frame_params, imu_params), dim=1))).to(self.device)
-        # si = self.activation(self.fusionLayer_si(torch.cat((frame_params, imu_params), dim=1))).to(self.device)
-        #
-        # newIMU = imu_params * sv
-        # newFrames = frame_params * si
-        # return F.relu(self.finalFusion(torch.cat((newFrames, newIMU), dim=1))).to(self.device)
+        return torch.cat((frame_params, imu_params), dim=1).to(self.device)
 
     def temporal_modelling(self, fused_params):
-        # self.fused_params = fused_params.unsqueeze(dim = 1)
         newParams = fused_params.reshape(fused_params.shape[0], self.temporalSeq, self.temporalSize)
         tempOut = self.temporalModel(newParams.float()).to(self.device)
         gaze_pred = self.activation(self.fc1(tempOut)).to(self.device)
-        # regOut_1 = F.relu(self.fc1(tempOut)).to(self.device)
-        # gaze_pred = self.activation(self.droput(self.fc2(regOut_1))).to(self.device)
-
-        #self.tempModel_h0, self.tempModel_c0 = h0.detach(), c0.detach()
 
         return gaze_pred
 
@@ -105,128 +83,185 @@ class FusionPipeline(nn.Module):
         return coordinate
 
     def get_num_correct(self, pred, label):
-        return torch.logical_and((torch.abs(pred[:,0]*1920-label[:,0]*1920) <= 100.0), (torch.abs(pred[:,1]*1080-label[:,1]*1080) <= 100.0)).sum().item()
+        return torch.logical_and((torch.abs(pred[:,0]-label[:,0]) <= 100.0), (torch.abs(pred[:,1]-label[:,1]) <= 100.0)).sum().item()
+
+    def get_original_coordinates(self, pred, labels):
+        pred[:,0] *= 3.75*1920.0
+        pred[:,1] *= 2.8125*1080.0
+
+        labels[:,0] *= 3.75*1920.0
+        labels[:,1] *= 2.8125*1080.0
+
+        return pred, labels
 
 class FINAL_DATASET(Dataset):
-    def __init__(self, frame_feat, imu_feat, labels):
-        self.frame_feat = frame_feat
-        self.imu_feat = imu_feat
-        self.label = labels
+    def __init__(self, folder_type, imu_feat, labels):
+        self.var = RootVariables()
+        self.folder_type = folder_type
+        self.labels = labels
+        self.imu = imu_feat
+        self.indexes = []
+        checkedLast = False
+        for index in range(len(self.labels)):
+            check = np.isnan(self.labels[index])
+            imu_check = np.isnan(self.imu[index])
+            if check.any() or imu_check.any():
+                continue
+            else:
+                self.indexes.append(index)
+
         self.transforms = transforms.Compose([transforms.ToTensor()])
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def __len__(self):
-        return len(self.label)
+        return len(self.indexes) # len(self.labels)
 
     def __getitem__(self, index):
-        return self.transforms(self.frame_feat[index]).to(self.device), torch.from_numpy(self.imu_feat[index]).to(self.device), torch.from_numpy(self.label[index]).to(self.device)
+        index = self.indexes[index]
+
+        img =  np.load(self.var.root + self.folder_type + '/frames_' + str(index) +'.npy')
+        targets = self.labels[index]
+        targets[:,0] *= 0.2667
+        targets[:,1] *= 0.3556
+
+        return self.transforms(img).to(self.device), torch.from_numpy(self.imu[index]).to(self.device), torch.from_numpy(targets).to(self.device)
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--fp16', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
-    parser.add_argument("--rgb_max", type=float, default=255.)
-    args = parser.parse_args()
 
-    test_folder = 'train_BookShelf_S1'
-    model_checkpoint = 'pipeline_checkpoint_' + test_folder[6:] + '.pth'
-    flownet_checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
+    test_folder = 'test_CoffeeVendingMachine_S1'
+    model_checkpoint = 'pipeline_checkpoint_' + test_folder[5:] + '.pth'
+    flownet_checkpoint = 'flownets_EPE1.951.pth.tar'
     trim_frame_size = 150
     arg = 'del'
     n_epochs = 0
     # current_loss_mean_train, current_loss_mean_val, current_loss_mean_test = 0.0, 0.0,  0.0
-    pipeline = FusionPipeline(args, flownet_checkpoint, trim_frame_size, device)
+    pipeline = FusionPipeline(flownet_checkpoint, test_folder, device)
     optimizer = optim.SGD(pipeline.parameters(), lr=1e-4, momentum=0.9)
+    lambda1 = lambda epoch: 0.65 ** epoch
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda1, last_epoch=-1)
     criterion = nn.L1Loss()
     print(pipeline)
+    best_test_loss = 1000.0
     if Path(pipeline.var.root + 'datasets/' + test_folder[5:] + '/' + model_checkpoint).is_file():
-        checkpoint = torch.load(pipeline.var.root + model_checkpoint)
+        checkpoint = torch.load(pipeline.var.root + 'datasets/' + test_folder[5:] + '/' + model_checkpoint)
         pipeline.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        best_test_loss = checkpoint['best_test_loss']
         # pipeline.current_loss = checkpoint['loss']
         print('Model loaded')
 
-    utils = Helpers(test_folder)
-    frame_training_feat, frame_testing_feat, imu_training, imu_testing, training_target, testing_target = utils.load_datasets()
+    utils = Helpers(test_folder, reset_dataset=1)
+    imu_training, imu_testing, training_target, testing_target = utils.load_datasets()
 
     os.chdir(pipeline.var.root)
-    imu_training_feat = np.copy(imu_training)
-    imu_testing_feat = np.copy(imu_testing)
-    imu_training_feat[:, :, 1] += 9.80665
-    imu_testing_feat[:, :, 1] += 9.80665
-    imu_training_feat = utils.standarization(imu_training_feat)
-    imu_testing_feat = utils.standarization(imu_testing_feat)
 
     for epoch in tqdm(range(n_epochs), desc="epochs"):
-        trainDataset = FINAL_DATASET(frame_training_feat, imu_training_feat, training_target)
+        if epoch > 0:
+            utils = Helpers(test_folder, reset_dataset=0)
+            imu_training, imu_testing, training_target, testing_target = utils.load_datasets()
+
+        trainDataset = FINAL_DATASET('training_images', imu_training, training_target)
         trainLoader = torch.utils.data.DataLoader(trainDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=0)
         tqdm_trainLoader = tqdm(trainLoader)
-        testDataset = FINAL_DATASET(frame_testing_feat, imu_testing_feat, testing_target)
+        testDataset = FINAL_DATASET('testing_images', imu_testing,  testing_target)
         testLoader = torch.utils.data.DataLoader(testDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=0)
         tqdm_testLoader = tqdm(testLoader)
-
-        num_samples = 0
-        total_loss, total_correct, total_accuracy = 0.0, 0.0, 0.0
-        pipeline.train()
-        for batch_index, (frame_feat, imu_feat, labels) in enumerate(tqdm_trainLoader):
-            num_samples += frame_feat.size(0)
-            labels = labels[:,0,:]
-            pred = pipeline(frame_feat, imu_feat).to(device)
-            # imuPred = pipeline.activation(pipeline.imuRegressor(pipeline.imuModel(imu_feat.float()))).to(device)
-            # framePred = pipeline.activation(pipeline.frameRegressor(pipeline.frameModel(frame_feat.float()))).to(device)
-            combLoss = criterion(pred, labels.float())
-            # imuLoss = criterion(imuPred, labels.float())
-            # frameLoss = criterion(framePred, labels.float())
-            loss = combLoss #+ imuLoss + frameLoss
-            total_loss += loss.item()
-            total_correct += pipeline.get_num_correct(pred, labels.float())
-            total_accuracy = total_correct / num_samples
-            tqdm_trainLoader.set_description('training: ' + '_loss: {:.4} correct: {} accuracy: {:.3}'.format(
-                total_loss / num_samples, total_correct, 100.0*total_accuracy))
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
 
         if epoch == 0 and 'del' in arg:
             # _ = os.system('mv runs new_backup')
             _ = os.system('rm -rf ' + pipeline.var.root + 'datasets/' + test_folder[5:] + '/runs/' + pipeline.tensorboard_folder)
 
+        num_samples = 0
+        total_loss, total_correct, total_accuracy = [], 0.0, 0.0
+        pipeline.train()
         tb = SummaryWriter(pipeline.var.root + 'datasets/' + test_folder[5:] + '/runs/' + pipeline.tensorboard_folder)
-        tb.add_scalar("Train Loss", total_loss / num_samples, epoch)
-        tb.add_scalar("Training Correct", total_correct, epoch)
-        tb.add_scalar("Train Accuracy", total_accuracy, epoch)
+        for batch_index, (frame_feat, imu_feat, labels) in enumerate(tqdm_trainLoader):
+            num_samples += frame_feat.size(0)
+            labels = labels[:,0,:]
+            pred = pipeline(frame_feat, imu_feat).to(device)
 
+            loss = criterion(pred, labels.float())
+            optimizer.zero_grad()
+            loss.backward()
+            ## add gradient clipping
+            nn.utils.clip_grad_value_(pipeline.parameters(), clip_value=1.0)
+            optimizer.step()
+
+            with torch.no_grad():
+
+                pred, labels = pipeline.get_original_coordinates(pred, labels)
+
+                dist = torch.cdist(pred, labels.float(), p=2)[0].unsqueeze(dim=0)
+                if batch_index > 0:
+                    trainPD = torch.cat((trainPD, dist), 0)
+                else:
+                    trainPD = dist
+
+                total_loss.append(loss.detach().item())
+                total_correct += pipeline.get_num_correct(pred, labels.float())
+                total_accuracy = total_correct / num_samples
+                tqdm_trainLoader.set_description('training: ' + '_loss: {:.4} correct: {} accuracy: {:.3} MPD: {}'.format(
+                    np.mean(total_loss), total_correct, 100.0*total_accuracy, torch.mean(trainPD)))
+
+                if batch_index % 10 :
+                    tb.add_scalar("Train Pixel Distance", torch.mean(trainPD[len(trainPD)-10:]), batch_index + (epoch*len(trainLoader)))
+
+        scheduler.step()
         pipeline.eval()
         with torch.no_grad():
+            tb = SummaryWriter(pipeline.var.root + 'datasets/' + test_folder[5:] + '/runs/' + pipeline.tensorboard_folder)
+            tb.add_scalar("Train Loss", np.mean(total_loss), epoch)
+            tb.add_scalar("Training Correct", total_correct, epoch)
+            tb.add_scalar("Train Accuracy", total_accuracy, epoch)
+            tb.add_scalar("Mean train pixel dist", torch.mean(trainPD), epoch)
+
             num_samples = 0
-            total_loss, total_correct, total_accuracy = 0.0, 0.0, 0.0
+            total_loss, total_correct, total_accuracy = [], 0.0, 0.0
+            dummy_correct, dummy_accuracy = 0.0, 0.0
             for batch_index, (frame_feat, imu_feat, labels) in enumerate(tqdm_testLoader):
                 num_samples += frame_feat.size(0)
                 labels = labels[:,0,:]
-                pred = pipeline(frame_feat, imu_feat).to(device)
-                # imuPred = pipeline.activation(pipeline.imuRegressor(pipeline.imuModel(imu_feat.float()))).to(device)
-                # framePred = pipeline.activation(pipeline.frameRegressor(pipeline.frameModel(frame_feat.float()))).to(device)
-                combLoss = criterion(pred, labels.float())
-                # imuLoss = criterion(imuPred, labels.float())
-                # frameLoss = criterion(framePred, labels.float())
-                loss = combLoss #+ imuLoss + frameLoss
-                total_loss += loss.item()
-                total_correct += pipeline.get_num_correct(pred, labels.float())
-                total_accuracy = total_correct / num_samples
-                tqdm_testLoader.set_description('testing: ' + '_loss: {:.4} correct: {} accuracy: {:.3}'.format(
-                    total_loss / num_samples, total_correct, 100.0*total_accuracy))
+                dummy_pts = (torch.ones(8, 2) * 0.5).to(device)
+                dummy_pts[:,0] *= 1920
+                dummy_pts[:,1] *= 1080
 
-        tb.add_scalar("Testing Loss", total_loss / num_samples, epoch)
+                pred = pipeline(frame_feat, imu_feat).to(device)
+                loss = criterion(pred, labels.float())
+
+                pred, labels = pipeline.get_original_coordinates(pred, labels)
+
+                dist = torch.cdist(pred, labels.float(), p=2)[0].unsqueeze(dim=0)
+                if batch_index > 0:
+                    testPD = torch.cat((testPD, dist), 0)
+                else:
+                    testPD = dist
+
+                total_loss.append(loss.detach().item())
+                total_correct += pipeline.get_num_correct(pred, labels.float())
+                dummy_correct += pipeline.get_num_correct(dummy_pts.float(), labels.float())
+                dummy_accuracy = dummy_correct / num_samples
+                total_accuracy = total_correct / num_samples
+                tqdm_testLoader.set_description('testing: ' + '_loss: {:.4} correct: {} accuracy: {:.3} MPD: {} DAcc: {:.4}'.format(
+                    np.mean(total_loss), total_correct, 100.0*total_accuracy, torch.mean(testPD), np.floor(100.0*dummy_accuracy)))
+
+                if batch_index % 10 :
+                    tb.add_scalar("Test Pixel Distance", torch.mean(testPD[len(testPD)-10:]), batch_index+(epoch*len(testLoader)))
+
+        tb.add_scalar("Testing Loss", np.mean(total_loss), epoch)
         tb.add_scalar("Testing Correct", total_correct, epoch)
         tb.add_scalar("Testing Accuracy", total_accuracy, epoch)
+        tb.add_scalar("Dummy Accuracy", np.floor(100.0*dummy_accuracy), epoch)
+        tb.add_scalar("Mean test pixel dist", torch.mean(testPD), epoch)
         tb.close()
 
-        if epoch % 5 == 0:
+        if np.mean(total_loss) <= best_test_loss:
+            best_test_loss = np.mean(total_loss)
             torch.save({
                         'epoch': epoch,
                         'model_state_dict': pipeline.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
+                        'best_test_loss': best_test_loss,
                         }, pipeline.var.root + 'datasets/' + test_folder[5:] + '/' + model_checkpoint)
             print('Model saved')
 

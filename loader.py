@@ -118,7 +118,7 @@ class JSON_LOADER:
                 self.var.gaze_data[1].append(np.nan)
 
         if return_val:
-            return self.get_sample_rate(self.var.timestamps_gaze[0:7057])
+            return self.get_sample_rate(self.var.timestamps_gaze)
 
     def POP_IMU_DATA(self, frame_count, cut_short =True, return_val=False):
         nT, oT = 0.0, 0.0
@@ -129,11 +129,10 @@ class JSON_LOADER:
                 if(float(data['timestamp']) > self.start_timestamp):
                     diff = round((nT - oT), 2)
 
-                    if diff > 0.01 :
+                    if diff > 0.02 :
                         diff *= 100
                         diff = int(diff)
                         a = [round(oT + 0.01*i, 2) for i in range(1, diff)]
-
                         self.var.imu_data_acc[0].extend(repeat(np.nan, diff - 1))
                         self.var.imu_data_acc[1].extend(repeat(np.nan, diff - 1))
                         self.var.imu_data_acc[2].extend(repeat(np.nan, diff - 1))
@@ -198,10 +197,10 @@ if __name__ == "__main__":
     capture = cv2.VideoCapture('scenevideo.mp4')
     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
     dataset = JSON_LOADER(folder)
-    print(dataset.POP_GAZE_DATA(frame_count, return_val=True))
+    # print(dataset.POP_GAZE_DATA(frame_count, return_val=True))
+    # print(len(dataset.var.timestamps_gaze), len(dataset.var.gaze_data[0]), dataset.var.n_gaze_samples, frame_count)
     print(dataset.POP_IMU_DATA(frame_count, cut_short=True, return_val=True))
     print(len(dataset.var.timestamps_imu), len(dataset.var.imu_data_acc[0]), dataset.var.n_imu_samples,frame_count*4)
-    print(len(dataset.var.timestamps_gaze), len(dataset.var.gaze_data[0]), dataset.var.n_gaze_samples, frame_count)
     # print(dataset.POP_IMU_DATA(frame_count, cut_short=True, return_val=True))
 # print(utils.get_sample_rate(var.timestamps_imu), len(var.timestamps_imu))
 # print(utils.get_sample_rate(var.timestamps_gaze), len(var.timestamps_gaze))

@@ -3,101 +3,74 @@ from tqdm import tqdm
 import torch, argparse
 from pathlib import Path
 import numpy as np
-from pipeline_new import FusionPipeline
-from vision_pipeline import VISION_PIPELINE, VISION_DATASET
-from prepare_dataset import IMU_GAZE_FRAME_DATASET, UNIFIED_DATASET
+from helpers import Helpers
+import torch.nn as nn
+from vision_pipeline import VISION_PIPELINE, FINAL_DATASET
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--fp16', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
-    parser.add_argument("--rgb_max", type=float, default=255.)
-    args = parser.parse_args()
 
-    model_checkpoint = 'hidden_256_relu_50e_VP.pth'
-    flownet_checkpoint = 'FlowNet2-S_checkpoint.pth.tar'
+    test_folder = 'test_BookShelf_S1'
+    model_checkpoint = 'vision_checkpoint_' + test_folder[5:] + '.pth'
+    flownet_checkpoint = 'flownets_EPE1.951.pth.tar'
+    # flownet_checkpoint = 'FlowNet2-SD_checkpoint.pth.tar'
 
+    arg = 'del'
+    n_epochs = 1
+    toggle = 0
     trim_frame_size = 150
-    pipeline = VISION_PIPELINE(args, flownet_checkpoint, device)
+    pipeline = VISION_PIPELINE(flownet_checkpoint, device)
+    print(pipeline)
+    criterion = nn.L1Loss()
 
-    if Path(pipeline.var.root + model_checkpoint).is_file():
-        checkpoint = torch.load(pipeline.var.root + model_checkpoint)
+    if Path(pipeline.var.root + 'datasets/' + test_folder[5:] + '/' + model_checkpoint).is_file():
+        checkpoint = torch.load(pipeline.var.root + 'datasets/' + test_folder[5:] + '/' + model_checkpoint)
         pipeline.load_state_dict(checkpoint['model_state_dict'])
+        # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        # pipeline.current_loss = checkpoint['loss']
         print('Model loaded')
 
-    uni_dataset = pipeline.prepare_dataset()
-    uni_gaze_dataset = uni_dataset.gaze_datasets
-
-    start_index, end_index = 0, 0
+    utils = Helpers(test_folder)
+    _, _, _, testing_target = utils.load_datasets()
+    os.chdir(pipeline.var.root)
 
     pipeline.eval()
     with torch.no_grad():
-        sliced_imu_dataset, sliced_gaze_dataset, sliced_frame_dataset = None, None, None
-        catList = None
-        for index, subDir in enumerate(sorted(os.listdir(pipeline.var.root))):
-            if 'imu_' in subDir:
-                print(subDir)
-                subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
-                os.chdir(pipeline.var.root + subDir)
-                capture = cv2.VideoCapture('scenevideo.mp4')
-                frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                end_index = start_index + frame_count - trim_frame_size*2
-                if 'imu_smallGroupMeeting_S4csdvsdb' in subDir:
-                    sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index]
-                    print(sliced_gaze_dataset[0])
+        testDataset = FINAL_DATASET('test_', testing_target)
+        testLoader = torch.utils.data.DataLoader(testDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=0)
 
-                    if not Path(pipeline.var.root + 'vision_' + subDir[4:-1] + '_predictions.pt').is_file():
-                        sliced_frame_dataset = np.load(str(pipeline.var.frame_size) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
+        tqdm_testLoader = tqdm(testLoader)
+        num_samples = 0
+        total_loss, total_correct, total_accuracy = [], 0.0, 0.0
+        finalPred, testPD = [], []
+        for batch_index, (feat, labels) in enumerate(tqdm_testLoader):
+            num_samples += feat.size(0)
+            labels = labels[:,0,:]
 
-                        unified_dataset = VISION_DATASET(sliced_frame_dataset, sliced_gaze_dataset, device)
-                        unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
-                        tqdm_valLoader = tqdm(unified_dataloader)
-                        for batch_index, (frame_data, gaze_data) in enumerate(tqdm_valLoader):
-                            gaze_data = torch.sum(gaze_data, axis=1) / 4.0
-                            coordinates = pipeline(frame_data).to(device)
+            pred = pipeline(feat.float()).to(device)
+            loss = criterion(pred, labels.float())
 
-                            if batch_index == 0:
-                                catList = coordinates
-                            else:
-                                catList = torch.cat((catList, coordinates), axis=0)
+            pred, labels = pipeline.get_original_coordinates(pred, labels)
 
-                        torch.save(catList, pipeline.var.root + 'vision_' + subDir[4:-1] + '_predictions.pt')
+            dist = torch.cdist(pred, labels.float(), p=2)
+            if batch_index > 0:
+                testPD = torch.cat((testPD, dist), 0)
+                finalPred = torch.cat((finalPred, pred), 0)
+            else:
+                testPD = dist
+                finalPred = pred
 
-                    break
+            total_loss.append(loss.detach().item())
+            total_correct += pipeline.get_num_correct(pred, labels.float())
+            total_accuracy = total_correct / num_samples
+            tqdm_testLoader.set_description('testing: ' + '_loss: {:.4} correct: {} accuracy: {:.3} {}'.format(
+                np.mean(total_loss), total_correct, 100.0*total_accuracy, torch.mean(testPD)))
 
-                start_index = end_index
+        finalPred = finalPred.cpu().detach().numpy()
 
-            if 'test_' in subDir:
-                print(subDir)
-                subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
-                os.chdir(pipeline.var.root + subDir)
-                capture = cv2.VideoCapture('scenevideo.mp4')
-                frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                end_index = start_index + frame_count - trim_frame_size*2
-                if 'test_InTheDeak_S2' in subDir:
-                    sliced_gaze_dataset = uni_gaze_dataset[start_index: end_index]
-                    print(sliced_gaze_dataset[0])
-
-                    if not Path(pipeline.var.root + 'vision_' + subDir[4:-1] + '_predictions.pt').is_file():
-                        sliced_frame_dataset = np.load(str(pipeline.var.frame_size) + '_framesExtracted_data_' + str(trim_frame_size) + '.npy', mmap_mode='r')
-
-                        unified_dataset = VISION_DATASET(sliced_frame_dataset, sliced_gaze_dataset, device)
-                        unified_dataloader = torch.utils.data.DataLoader(unified_dataset, batch_size=pipeline.var.batch_size, num_workers=0, drop_last=True)
-                        tqdm_valLoader = tqdm(unified_dataloader)
-                        for batch_index, (frame_data, gaze_data) in enumerate(tqdm_valLoader):
-                            gaze_data = torch.sum(gaze_data, axis=1) / 4.0
-                            coordinates = pipeline(frame_data).to(device)
-
-                            if batch_index == 0:
-                                catList = coordinates
-                            else:
-                                catList = torch.cat((catList, coordinates), axis=0)
-
-                        torch.save(catList, pipeline.var.root + 'vision_' + subDir[4:-1] + '_predictions.pt')
-
-                    break
-
-                start_index = end_index
+        with open(self.var.root + 'final_pred_Book.npy') as f:
+            np.save(f, finalPred)
+            f.close()
 
     print(sliced_gaze_dataset[0])
     video_file = 'scenevideo.mp4'
@@ -116,7 +89,7 @@ if __name__ == "__main__":
     out = cv2.VideoWriter('vision_output.mp4',fourcc, fps, (frame.shape[1],frame.shape[0]))
     # frame_count = 0
     # df_gaze = df_gaze.T
-    for i in range(frame_count - 1):
+    for i in range(0):
         if ret == True:
             cv2.namedWindow('image', cv2.WINDOW_NORMAL)
             cv2.resizeWindow('image', 512, 512)
