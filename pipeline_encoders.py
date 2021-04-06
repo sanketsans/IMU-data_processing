@@ -15,8 +15,8 @@ class IMU_ENCODER(nn.Module):
         super(IMU_ENCODER, self).__init__()
         torch.manual_seed(0)
         self.var = RootVariables()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.lstm = nn.LSTM(self.var.imu_input_size, self.var.hidden_size, self.var.num_layers, batch_first=True, dropout=0.65, bidirectional=True).to(self.device)
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.lstm = nn.LSTM(self.var.imu_input_size, self.var.hidden_size, self.var.num_layers, batch_first=True, dropout=0.65, bidirectional=True).to("cuda:0")
         # self.fc0 = nn.Linear(6, self.var.imu_input_size).to(self.device)
         self.fc1 = nn.Linear(self.var.hidden_size*2, 2).to(self.device)
 
@@ -31,50 +31,50 @@ class IMU_ENCODER(nn.Module):
         return out[:,-1,:]
 
 class TEMP_ENCODER(nn.Module):
-    def __init__(self, input_size, device):
+    def __init__(self, input_size):
         super(TEMP_ENCODER, self).__init__()
         torch.manual_seed(0)
         self.var = RootVariables()
-        self.device = device
-        self.lstm = nn.LSTM(input_size, self.var.hidden_size, self.var.num_layers, batch_first=True, bidirectional=True).to(self.device)
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.lstm = nn.LSTM(input_size, int(self.var.hidden_size/2), int(self.var.num_layers/2), batch_first=True, dropout=0.45, bidirectional=True).to("cuda:0")
 
     def forward(self, x):
         # hidden = (h0, c0)
-        h0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size, requires_grad=True).to(self.device)
-        c0 = torch.randn(self.var.num_layers*2, self.var.batch_size, self.var.hidden_size, requires_grad=True).to(self.device)
+        h0 = torch.randn(self.var.num_layers, self.var.batch_size, int(self.var.hidden_size/2), requires_grad=True).to("cuda:0")
+        c0 = torch.randn(self.var.num_layers, self.var.batch_size, int(self.var.hidden_size/2), requires_grad=True).to("cuda:0")
         out, _ = self.lstm(x, (h0, c0))
         # out = self.activation(self.fc1(out[:,-1,:]))
         return out[:,-1,:]
 
 class VIS_ENCODER(nn.Module):
-    def __init__(self, checkpoint_path, device, input_channels=6, batch_norm=False):
+    def __init__(self, checkpoint_path, input_channels=6, batch_norm=False):
         super(VIS_ENCODER, self).__init__()
 
         self.var = RootVariables()
         torch.manual_seed(1)
-        self.device = device
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.net = FlowNetS.FlowNetS(batch_norm)
         dict = torch.load(checkpoint_path)
         self.net.load_state_dict(dict["state_dict"])
-        self.net = nn.Sequential(*list(self.net.children())[0:10]).to(self.device)
-        # for i in range(len(self.net) - 1):
-        #     self.net[i][1] = nn.ReLU()
+        self.net = nn.Sequential(*list(self.net.children())[0:9]).to(self.device)
+        for i in range(len(self.net) - 1):
+            self.net[i][1] = nn.ReLU()
 
-        self.fc1 = nn.Linear(1024*6*8, 4096).to(self.device)
-        self.fc2 = nn.Linear(4096, 64).to(self.device)
-        self.fc3 = nn.Linear(64, 2).to(self.device)
-        self.dropout = nn.Dropout(0.2)
+        self.fc1 = nn.Linear(1024*6*8, 256).to(self.device)
+#        self.fc2 = nn.Linear(4096, 256).to(self.device)
+        self.fc3 = nn.Linear(256, 2).to(self.device)
+        self.dropout = nn.Dropout(0.3)
         # self.net[8][1] = nn.ReLU(inplace=False)
-        # self.net[8] = self.net[8][0]
+        self.net[8] = self.net[8][0]
 
-        for params in self.net.parameters():
-            params.requires_grad = True
+#        for params in self.net.parameters():
+#            params.requires_grad = True
 
     def forward(self, input_img):
         out = self.net(input_img)
         out = out.reshape(-1, 1024*6*8)
         out = F.relu(self.dropout(self.fc1(out)))
-        out = F.relu(self.dropout(self.fc2(out)))
+        #out = F.leaky_relu(self.dropout(self.fc2(out)), 0.1)
         # out = self.activation(self.fc3(out))
 
         return out
@@ -109,3 +109,4 @@ if __name__ == "__main__":
     # newscore = scores.reshape(scores.shape[0], 4, 32)
     # print(newscore.shape)
     # print(newscore)
+

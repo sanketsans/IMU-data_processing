@@ -10,6 +10,7 @@ sys.path.append('../')
 from loader import JSON_LOADER
 from variables import RootVariables
 import matplotlib.pyplot as plt
+from torchvision import transforms
 
 class BUILDING_DATASETS:
     def __init__(self, test_folder):
@@ -27,7 +28,7 @@ class BUILDING_DATASETS:
         self.toggle = 0
         self.test_folder = test_folder
         self.stack_frames = []
-
+        self.transforms = transforms.Compose([transforms.ToTensor()])
         self.panda_data = {}
 
     def populate_gaze_data(self, subDir):
@@ -80,12 +81,12 @@ class BUILDING_DATASETS:
 
         return self.train_new, self.test_new
 
-    def load_unified_frame_dataset(self, reset_dataset):
+    def load_unified_frame_dataset(self, reset_dataset=0):
         ## INCLUDES THE LAST FRAME
         if reset_dataset == 1:
             print('Deleting the old dataset .. ')
-            _ = os.system('rm -r training_images')
-            _ = os.system('rm -r testing_images')
+            _ = os.system('rm -r ' + self.var.root + 'training_images')
+            _ = os.system('rm -r ' + self.var.root + 'testing_images')
 
             _ = os.system('mkdir ' + self.var.root + 'training_images')
             _ = os.system('mkdir ' + self.var.root + 'testing_images')
@@ -99,37 +100,32 @@ class BUILDING_DATASETS:
                     self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
                     if not Path(str(self.var.frame_size) + '_framesExtracted_data_AA' + str(self.var.trim_frame_size) + '.npy').is_file():
                         print('Train: ', subDir)
-                        # _ = os.system('rm ' + str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy')
+#                        _ = os.system('rm ' + str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy')
                         os.chdir(self.var.root + subDir)
                         self.capture = cv2.VideoCapture(self.video_file)
                         self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
                         self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.var.trim_frame_size)
                         self.ret, self.last = self.capture.read()
-                        _ = os.system('rm -rf images')
+#                        _ = os.system('rm -rf images')
                         # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.last)
                         self.last = cv2.resize(self.last, (512, 384))
                         total_frames = 1
-                        # train_frame_index += 1
+#                        train_frame_index += 1
                         while total_frames != (self.frame_count - self.var.trim_frame_size*2):
                             self.ret, self.train_new = self.capture.read()
                             # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.train_new)
                             self.train_new = cv2.resize(self.train_new, (512, 384))
                             stacked = np.concatenate((self.last, self.train_new), axis=2)
+#                            torch.save(self.transforms(stacked), self.var.root + 'training_images/frames_' + str(train_frame_index) + '.pt')
                             with open(self.var.root + 'training_images/frames_' + str(train_frame_index) + '.npy', 'wb') as f:
                                 np.save(f, stacked)
                                 f.close()
 
                             total_frames += 1
                             train_frame_index += 1
-                            # self.stack_frames.append(stacked)
+              #              self.train_stack_frames.append(stacked)
                             self.last = self.train_new
-
-                        # with open(self.var.root + subDir + str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy', 'wb') as f:
-                        #     np.save(f, self.stack_frames)
-                        #     f.close()
-
-                        # self.stack_frames = []
 
                 if 'test_' in subDir:
                     total_frames = 0
@@ -139,32 +135,32 @@ class BUILDING_DATASETS:
                     self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
                     if not Path(str(self.var.frame_size) + '_framesExtracted_data_AA' + str(self.var.trim_frame_size) + '.npy').is_file():
                         print('Test: ', subDir)
-                        # _ = os.system('rm ' + str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy')
+ #                       _ = os.system('rm ' + str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy')
                         os.chdir(self.var.root + subDir)
                         self.capture = cv2.VideoCapture(self.video_file)
                         self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
                         self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.var.trim_frame_size)
                         self.ret, self.last = self.capture.read()
-                        _ = os.system('rm -rf images')
+ #                       _ = os.system('rm -rf images')
                         # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.last)
                         self.last = cv2.resize(self.last, (512, 384))
                         total_frames = 1
-                        # test_frame_index += 1
+#                        test_frame_index += 1
                         while total_frames != (self.frame_count - self.var.trim_frame_size*2):
                             self.ret, self.train_new = self.capture.read()
                             # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.train_new)
                             self.train_new = cv2.resize(self.train_new, (512, 384))
                             stacked = np.concatenate((self.last, self.train_new), axis=2)
+#                            torch.save(self.transforms(stacked), self.var.root + 'testing_images/frames_' + str(train_frame_index) + '.pt')
                             with open(self.var.root + 'testing_images/frames_' + str(test_frame_index) + '.npy', 'wb') as f:
                                 np.save(f, stacked)
                                 f.close()
 
                             total_frames += 1
                             test_frame_index += 1
-                            # self.stack_frames.append(stacked)
+             #               self.test_stack_frames.append(stacked)
                             self.last = self.train_new
-
 
     def populate_imu_data(self, subDir):
         # if toggle != self.toggle:

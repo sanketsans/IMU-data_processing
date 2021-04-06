@@ -22,6 +22,7 @@ class IMU_GAZE_FRAME_DATASET:
         self.imu_test_datasets, self.gaze_test_datasets = None, None
         if Path(self.var.root + 'datasets/' + test_folder[5:] + '/imuExtracted_training_data' + '.npy').is_file():
             print('Files exists')
+
             self.imu_train_datasets = np.load(self.var.root + 'datasets/' + test_folder[5:] + '/imuExtracted_training_data' + '.npy')
             self.gaze_train_datasets = np.load(self.var.root + 'datasets/' + test_folder[5:] + '/gazeExtracted_training_data' + '.npy')
             self.imu_test_datasets = np.load(self.var.root + 'datasets/' + test_folder[5:] + '/imuExtracted_testing_data' + '.npy')
