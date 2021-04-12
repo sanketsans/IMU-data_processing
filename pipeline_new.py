@@ -15,15 +15,14 @@ from tqdm import tqdm
 sys.path.append('../')
 from pipeline_encoders import IMU_ENCODER, TEMP_ENCODER, VIS_ENCODER
 from helpers import Helpers
-from FlowNetPytorch.models import FlowNetS
+# from FlowNetPytorch.models import FlowNetS
 from variables import RootVariables
 from torch.utils.tensorboard import SummaryWriter
 
 class FusionPipeline(nn.Module):
-    def __init__(self, checkpoint, test_folder, device=None):
+    def __init__(self):
         super(FusionPipeline, self).__init__()
         torch.manual_seed(2)
-        self.device = device
         self.var = RootVariables()
         self.checkpoint_path = self.var.root + checkpoint
         self.activation = nn.Sigmoid()
@@ -35,14 +34,14 @@ class FusionPipeline(nn.Module):
 
         ## IMU Models
         self.imuModel = IMU_ENCODER()
-        imuCheckpoint = torch.load(self.var.root + 'datasets/' + test_folder[5:] + '/' + self.imuCheckpoint_file,  map_location="cuda:0")
+        imuCheckpoint = torch.load(self.var.root + 'datasets/' + self.var.test_folder[5:] + '/' + self.imuCheckpoint_file,  map_location="cuda:0")
         self.imuModel.load_state_dict(imuCheckpoint['model_state_dict'])
         for params in self.imuModel.parameters():
              params.requires_grad = True
 
         ## FRAME MODELS
-        self.frameModel =  VIS_ENCODER(self.checkpoint_path)
-        frameCheckpoint = torch.load(self.var.root + 'datasets/' + test_folder[5:] + '/' + self.frameCheckpoint_file,  map_location="cuda:0")
+        self.frameModel =  VIS_ENCODER()
+        frameCheckpoint = torch.load(self.var.root + 'datasets/' + self.var.test_folder[5:] + '/' + self.frameCheckpoint_file,  map_location="cuda:0")
         self.frameModel.load_state_dict(frameCheckpoint['model_state_dict'])
         for params in self.frameModel.parameters():
             params.requires_grad = True
@@ -61,7 +60,7 @@ class FusionPipeline(nn.Module):
         self.imuBN = nn.BatchNorm1d(self.var.hidden_size*2, affine=True).to("cuda:0")
         self.frameBN = nn.BatchNorm1d(self.var.hidden_size*2, affine=True).to("cuda:0")
         self.fcBN = nn.BatchNorm1d(256).to("cuda:0")
-        self.tensorboard_folder = 'pipeline_Adam' #'batch_64_Signal_outputs/'
+        self.tensorboard_folder = ''
 
     def get_encoder_params(self, imu_BatchData, frame_BatchData):
         self.imu_encoder_params = F.relu(self.imuBN(self.imuModel(imu_BatchData.float()))).to("cuda:0")
@@ -112,7 +111,6 @@ class FINAL_DATASET(Dataset):
     def __init__(self, folder_type, imu_feat, labels):
         self.var = RootVariables()
         self.folder_type = folder_type
-        self.gaze_data = []
         self.imu_data = []
         self.indexes = []
         checkedLast = False
@@ -123,7 +121,6 @@ class FINAL_DATASET(Dataset):
                 continue
             else:
                 self.indexes.append(index)
-                self.gaze_data.append(labels[index])
                 self.imu_data.append(imu_feat[index])
 
         self.imu_data = self.standarization(self.imu_data)
@@ -151,7 +148,7 @@ class FINAL_DATASET(Dataset):
         f_index = self.indexes[index]
 #        img = self.frames[f_index]
         img =  np.load(self.var.root + self.folder_type + '/frames_' + str(f_index) +'.npy')
-        targets = self.gaze_data[index]
+        targets = self.gaze_data[f_index]
         targets[:,0] *= 512.0
         targets[:,1] *= 384.0
 
@@ -160,11 +157,16 @@ class FINAL_DATASET(Dataset):
 if __name__ == "__main__":
     #device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     var = RootVariables()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sepoch", type=int, default=0)
+    # parser.add_argument('--sepoch', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
+    parser.add_argument("--nepoch", type=int, default=15)
+    parser.add_argument("--tfolder", action='store', help='tensorboard_folder name')
+    parser.add_argument("--reset_data", type=int)
+    args = parser.parse_args()
 
     lastFolder, newFolder = None, None
     for index, subDir in enumerate(sorted(os.listdir(var.root))):
-#        if 'train_BookShelf' in subDir or 'train_CoffeeVendingMachine_S1' in subDir or 'train_CoffeeVendingMachine_S2' in subDir or 'train_CoffeeVendingMachine_S3' in subDir or 'train_InTheDeak_S1' in subDir or 'train_InTheDeak_S2' in subDir or 'train_Lift_S1' in subDir or 'train_NespressoCoffeeMachine_S1' in subDir or 'train_NespressoCoffeeMachine_S2' in subDir or 'train_Outdoor_S1' in subDir or 'train_PosterSession_S1' in subDir:
-#            continue
 #        if 'train_BookShelf_S1' in subDir:
 #            continue
         if 'train_PosterSession' in subDir:
@@ -180,21 +182,13 @@ if __name__ == "__main__":
 
             print(newFolder, lastFolder)
             model_checkpoint = 'pipeline_checkpointAdam_' + test_folder[5:] + '.pth'
-            flownet_checkpoint = 'flownets_EPE1.951.pth.tar'
-
             arg = 'del'
-            n_epochs = 10
-            toggle = 0
             trim_frame_size = 150
+            var.test_folder = test_folder
 
-            pipeline = FusionPipeline(flownet_checkpoint, test_folder)
+            pipeline = FusionPipeline()
+            pipeline.tensorboard_folder = args.tfolder
             optimizer  = optim.Adam(pipeline.parameters(), lr=0.00095,  amsgrad=True)
-#            optimizer1  = optim.Adam([
-#                                    {'params': pipeline.imuModel.parameters(), 'lr': 0.0015},
-#                                    {'params': pipeline.frameModel.parameters(), 'lr': 1e-4},
-#                                    {'params': pipeline.temporalModel.parameters(), 'lr': 1e-5}
-#                                    ], lr=0.0001,  amsgrad=True)
-
 #            lambda1 = lambda epoch: 0.85 ** epoch
 #            scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda1, last_epoch=-1)
             criterion = nn.L1Loss()
@@ -203,30 +197,18 @@ if __name__ == "__main__":
             if Path(pipeline.var.root + 'datasets/' + test_folder[5:] + '/' + model_checkpoint).is_file():
                 checkpoint = torch.load(pipeline.var.root + 'datasets/' + test_folder[5:] + '/' + model_checkpoint)
                 pipeline.load_state_dict(checkpoint['model_state_dict'])
-#                optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
                 best_test_acc = checkpoint['best_test_acc']
                 # pipeline.current_loss = checkpoint['loss']
                 print('Model loaded')
-
-#            if torch.cuda.device_count() > 1:
- #             print("Let's use", torch.cuda.device_count(), "GPUs!")
-              # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
- #             model = nn.DataParallel(pipeline)
-#            model = pipeline
-  #          model.to(device)
             #if 'BookShelf​' in test_folder:
             #    utils = Helpers(test_folder, reset_dataset=1)
             #else:
-            utils = Helpers(test_folder, reset_dataset=1)
+            utils = Helpers(test_folder, reset_dataset=args.reset_data)
             n_epochs = 15
             imu_training, imu_testing, training_target, testing_target = utils.load_datasets()
-#            training_frames = np.load(self.var.root + str(self.var.frame_size) + '_train_stack_frames_' + str(self.var.trim_frame_size) + '.npy', mmap_mode='r')
-#            testing_frames = np.load(self.var.root + str(self.var.frame_size) + '_test_stack_frames_' + str(self.var.trim_frame_size) + '.npy', mmap_mode='r')
-#            ttesting_target = np.copy(testing_target)
-#            timu_testing = np.copy(imu_testing)
             os.chdir(pipeline.var.root)
 
-            for epoch in tqdm(range(n_epochs), desc="epochs"):
+            for epoch in tqdm(range(args.sepoch, args.nepochs), desc="epochs"):
                 if epoch > 0:
                     utils = Helpers(test_folder, reset_dataset=0)
                     imu_training, imu_testing, training_target, testing_target = utils.load_datasets()
@@ -276,9 +258,6 @@ if __name__ == "__main__":
                         tqdm_trainLoader.set_description('training: ' + '_loss: {:.4} correct: {} accuracy: {:.3} lr:{}'.format(
                             np.mean(total_loss), total_correct, 100.0*total_accuracy, optimizer.param_groups[0]['lr']))
 
-#                        if batch_index % 10 :
-#                            tb.add_scalar("Train Pixel Distance", torch.mean(trainPD[len(trainPD)-10:]), batch_index + (epoch*len(trainLoader)))
-
 #                scheduler.step()
                 pipeline.eval()
                 with torch.no_grad():
@@ -286,7 +265,6 @@ if __name__ == "__main__":
                     tb.add_scalar("Train Loss", np.mean(total_loss), epoch)
                     tb.add_scalar("Training Correct", total_correct, epoch)
                     tb.add_scalar("Train Accuracy", total_accuracy, epoch)
-#                    tb.add_scalar("Mean train pixel dist", torch.mean(trainPD), epoch)
 
                     num_samples = 0
                     total_loss, total_correct, total_accuracy = [], 0.0, 0.0
@@ -316,14 +294,10 @@ if __name__ == "__main__":
                         tqdm_testLoader.set_description('testing: ' + '_loss: {:.4} correct: {} accuracy: {:.3} DAcc: {:.4}'.format(
                             np.mean(total_loss), total_correct, 100.0*total_accuracy,  np.floor(100.0*dummy_accuracy)))
 
-#                        if batch_index % 10 :
-#                            tb.add_scalar("Test Pixel Distance", torch.mean(testPD[len(testPD)-10:]), batch_index+(epoch*len(testLoader)))
-
                 tb.add_scalar("Testing Loss", np.mean(total_loss), epoch)
                 tb.add_scalar("Testing Correct", total_correct, epoch)
                 tb.add_scalar("Testing Accuracy", total_accuracy, epoch)
                 tb.add_scalar("Dummy Accuracy", np.floor(100.0*dummy_accuracy), epoch)
-#                tb.add_scalar("Mean test pixel dist", torch.mean(testPD), epoch)
                 tb.close()
 
                 if total_accuracy >= best_test_acc:
