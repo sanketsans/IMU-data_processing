@@ -98,34 +98,30 @@ class BUILDING_DATASETS:
                     os.chdir(self.var.root + subDir)
                     self.capture = cv2.VideoCapture(self.video_file)
                     self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                    if not Path(str(self.var.frame_size) + '_framesExtracted_data_AA' + str(self.var.trim_frame_size) + '.npy').is_file():
-                        print('Train: ', subDir)
-#                        _ = os.system('rm ' + str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy')
-                        os.chdir(self.var.root + subDir)
-                        self.capture = cv2.VideoCapture(self.video_file)
-                        self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
+                    print('Train: ', subDir)
+                    os.chdir(self.var.root + subDir)
+                    self.capture = cv2.VideoCapture(self.video_file)
+                    self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
-                        self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.var.trim_frame_size)
-                        self.ret, self.last = self.capture.read()
-#                        _ = os.system('rm -rf images')
-                        # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.last)
-                        self.last = cv2.resize(self.last, (512, 384))
-                        total_frames = 1
-#                        train_frame_index += 1
-                        while total_frames != (self.frame_count - self.var.trim_frame_size*2):
-                            self.ret, self.train_new = self.capture.read()
-                            # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.train_new)
-                            self.train_new = cv2.resize(self.train_new, (512, 384))
-                            stacked = np.concatenate((self.last, self.train_new), axis=2)
+                    self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.var.trim_frame_size)
+                    self.ret, self.last = self.capture.read()
+                    # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.last)
+                    self.last = cv2.resize(self.last, (512, 384))
+                    total_frames = 1
+                    while total_frames != (self.frame_count - self.var.trim_frame_size*2):
+                        self.ret, self.train_new = self.capture.read()
+                        # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.train_new)
+                        self.train_new = cv2.resize(self.train_new, (512, 384))
+                        stacked = np.concatenate((self.last, self.train_new), axis=2)
 #                            torch.save(self.transforms(stacked), self.var.root + 'training_images/frames_' + str(train_frame_index) + '.pt')
-                            with open(self.var.root + 'training_images/frames_' + str(train_frame_index) + '.npy', 'wb') as f:
-                                np.save(f, stacked)
-                                f.close()
+                        with open(self.var.root + 'training_images/frames_' + str(train_frame_index) + '.npy', 'wb') as f:
+                            np.save(f, stacked)
+                            f.close()
 
-                            total_frames += 1
-                            train_frame_index += 1
-              #              self.train_stack_frames.append(stacked)
-                            self.last = self.train_new
+                        total_frames += 1
+                        train_frame_index += 1
+          #              self.train_stack_frames.append(stacked)
+                        self.last = self.train_new
 
                 if 'test_' in subDir:
                     total_frames = 0
@@ -133,39 +129,31 @@ class BUILDING_DATASETS:
                     os.chdir(self.var.root + subDir)
                     self.capture = cv2.VideoCapture(self.video_file)
                     self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                    if not Path(str(self.var.frame_size) + '_framesExtracted_data_AA' + str(self.var.trim_frame_size) + '.npy').is_file():
-                        print('Test: ', subDir)
- #                       _ = os.system('rm ' + str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy')
-                        os.chdir(self.var.root + subDir)
-                        self.capture = cv2.VideoCapture(self.video_file)
-                        self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
+                    print('Test: ', subDir)
+                    os.chdir(self.var.root + subDir)
+                    self.capture = cv2.VideoCapture(self.video_file)
+                    self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
-                        self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.var.trim_frame_size)
-                        self.ret, self.last = self.capture.read()
- #                       _ = os.system('rm -rf images')
-                        # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.last)
-                        self.last = cv2.resize(self.last, (512, 384))
-                        total_frames = 1
-#                        test_frame_index += 1
-                        while total_frames != (self.frame_count - self.var.trim_frame_size*2):
-                            self.ret, self.train_new = self.capture.read()
-                            # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.train_new)
-                            self.train_new = cv2.resize(self.train_new, (512, 384))
-                            stacked = np.concatenate((self.last, self.train_new), axis=2)
+                    self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.var.trim_frame_size)
+                    self.ret, self.last = self.capture.read()
+                    # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.last)
+                    self.last = cv2.resize(self.last, (512, 384))
+                    total_frames = 1
+                    while total_frames != (self.frame_count - self.var.trim_frame_size*2):
+                        self.ret, self.train_new = self.capture.read()
+                        # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.train_new)
+                        self.train_new = cv2.resize(self.train_new, (512, 384))
+                        stacked = np.concatenate((self.last, self.train_new), axis=2)
 #                            torch.save(self.transforms(stacked), self.var.root + 'testing_images/frames_' + str(train_frame_index) + '.pt')
-                            with open(self.var.root + 'testing_images/frames_' + str(test_frame_index) + '.npy', 'wb') as f:
-                                np.save(f, stacked)
-                                f.close()
+                        with open(self.var.root + 'testing_images/frames_' + str(test_frame_index) + '.npy', 'wb') as f:
+                            np.save(f, stacked)
+                            f.close()
 
-                            total_frames += 1
-                            test_frame_index += 1
-             #               self.test_stack_frames.append(stacked)
-                            self.last = self.train_new
+                        total_frames += 1
+                        test_frame_index += 1
+                        self.last = self.train_new
 
     def populate_imu_data(self, subDir):
-        # if toggle != self.toggle:
-        #     self.folders_num = 0
-        #     self.toggle = toggle
 
         subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
         print(subDir)
@@ -183,14 +171,6 @@ class BUILDING_DATASETS:
         self.imu_arr_gyro = np.array(self.dataset.var.imu_data_gyro).transpose()
         temp = np.zeros((len(self.imu_arr_acc) , 6))
 
-        # temp = np.zeros((self.frame_count*4 - self.var.trim_frame_size*4, 6))
-        # temp[:,0] = self.imu_arr_acc[tuple([np.arange(self.var.trim_frame_size*2, self.frame_count*4 - self.var.trim_frame_size*2), [0]])]
-        # temp[:,0] = self.imu_arr_acc[tuple([np.arange(self.var.trim_frame_size*2 , self.frame_count*4 - self.var.trim_frame_size*2 ), [0]])]
-        # temp[:,1] = self.imu_arr_acc[tuple([np.arange(self.var.trim_frame_size*2 , self.frame_count*4- self.var.trim_frame_size*2 ), [1]])]
-        # temp[:,2] = self.imu_arr_acc[tuple([np.arange(self.var.trim_frame_size*2 , self.frame_count*4- self.var.trim_frame_size*2 ), [2]])]
-        # temp[:,3] = self.imu_arr_gyro[tuple([np.arange(self.var.trim_frame_size*2 , self.frame_count*4- self.var.trim_frame_size*2 ), [0]])]
-        # temp[:,4] = self.imu_arr_gyro[tuple([np.arange(self.var.trim_frame_size*2 , self.frame_count*4- self.var.trim_frame_size*2 ), [1]])]
-        # temp[:,5] = self.imu_arr_gyro[tuple([np.arange(self.var.trim_frame_size*2 , self.frame_count*4- self.var.trim_frame_size*2 ), [2]])]
         temp = np.zeros((self.frame_count*4-self.var.trim_frame_size*4, 6))
         temp[:,0] = self.imu_arr_acc[tuple([np.arange(self.var.trim_frame_size*2, self.frame_count*4 - self.var.trim_frame_size*2), [0]])]
         temp[:,1] = self.imu_arr_acc[tuple([np.arange(self.var.trim_frame_size*2, self.frame_count*4 - self.var.trim_frame_size*2), [1]])]

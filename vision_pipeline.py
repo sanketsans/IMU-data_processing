@@ -20,38 +20,31 @@ from helpers import Helpers
 from torch.utils.tensorboard import SummaryWriter
 #from skimage.transform import rotate
 import random
-from torch.multiprocessing import Pool, Process, set_start_method
 
 class VISION_PIPELINE(nn.Module):
-    def __init__(self, checkpoint_path, trim_frame_size=150, input_channels=6, batch_norm=False):
+    def __init__(self, trim_frame_size=150, input_channels=6, batch_norm=False):
         super(VISION_PIPELINE, self).__init__()
         self.var = RootVariables()
         torch.manual_seed(1)
-#        self.device = device
-        # parser = argparse.ArgumentParser()
-        # parser.add_argument('--fp16', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
-        # parser.add_argument("--rgb_max", type=float, default=255.)
-        # args = parser.parse_args()
         self.net = FlowNetS.FlowNetS(batch_norm)
 
-        dict = torch.load(checkpoint_path)
+        dict = torch.load('flownets_EPE1.951.pth.tar')
         self.net.load_state_dict(dict["state_dict"])
         self.net = nn.Sequential(*list(self.net.children())[0:9]).to("cuda:0")
         for i in range(len(self.net) - 1):
              self.net[i][1] = nn.ReLU()
 
-        self.fc1 = nn.Linear(1024*6*8, 256).to("cuda:0")
- #       self.fc2 = nn.Linear(4096,256).to("cuda:1")
+        self.fc1 = nn.Linear(1024*6*8, 4096).to("cuda:0")
+        self.fc2 = nn.Linear(4096,256).to("cuda:0")
         self.fc3 = nn.Linear(256, 2).to("cuda:0")
         self.dropout = nn.Dropout(0.35)
         self.activation = nn.Sigmoid()
         # self.net[8][1] = nn.ReLU(inplace=False)
         self.net[8] = self.net[8][0]
+        self.tensorboard_folder = ''
 
         for params in self.net.parameters():
             params.requires_grad = True
-
-        self.tensorboard_folder = 'vision_Adam_9CNN' #'BLSTM_signal_outputs_sell1/'
 
     def get_num_correct(self, pred, label):
         return torch.logical_and((torch.abs(pred[:,0]-label[:,0]) <= 100.0), (torch.abs(pred[:,1]-label[:,1]) <= 100.0)).sum().item()
@@ -60,19 +53,19 @@ class VISION_PIPELINE(nn.Module):
         out = self.net(input_img).to("cuda:0")
 #        print(out.shape)
         out = out.reshape(-1, 1024*6*8)
-        out = F.relu(self.dropout(self.fc1(out)), 0.1).to("cuda:0")
-#        out = F.leaky_relu(self.dropout(self.fc2(out)), 0.1).to("cuda:1")
+        out = F.relu(self.dropout(self.fc1(out))).to("cuda:0")
+        out = F.relu(self.dropout(self.fc2(out))).to("cuda:0")
         out = F.relu(self.fc3(out)).to("cuda:0")
+
+        for index, val in enumerate(out):
+            if out[index][0] > 512.0:
+                out[index][0] = 512.0
+            if out[index][1] > 384.0:
+                out[index][1] = 384.0
 
         return out
 
     def get_original_coordinates(self, pred, labels):
-        # pred[:,0] *= 3.75*1920.0
-        # pred[:,1] *= 2.8125*1080.0
-        #
-        # labels[:,0] *= 3.75*1920.0
-        # labels[:,1] *= 2.8125*1080.0
-
         pred[:,0] *= 3.75
         pred[:,1] *= 2.8125
 
@@ -94,7 +87,6 @@ class VIS_FINAL_DATASET(Dataset):
                 continue
             else:
                 self.indexes.append(index)
-
 
         self.transforms = transforms.Compose([transforms.ToTensor()])
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -118,18 +110,19 @@ class VIS_FINAL_DATASET(Dataset):
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     var = RootVariables()
-    # test_folder = 'test_InTheDeak_S2'
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sepoch", type=int, default=0)
+    # parser.add_argument('--sepoch', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
+    parser.add_argument("--nepoch", type=int, default=15)
+    parser.add_argument("--tfolder", action='store', help='tensorboard_folder name')
+    parser.add_argument("--reset_data", type=int)
+    args = parser.parse_args()
+
     lastFolder, newFolder = None, None
-#    try:
-#     set_start_method('spawn')
-#    except RuntimeError:
-#     pass
     for index, subDir in enumerate(sorted(os.listdir(var.root))):
-#        if 'train_BookShelf' in subDir or 'train_CoffeeVendingMachine_S1' in subDir or 'train_CoffeeVendingMachine_S2' in subDir or 'train_CoffeeVendingMachine_S3' in subDir or 'train_InTheDeak_S1' in subDir or 'train_InTheDeak_S2' in subDir or 'train_Lift_S1' in subDir or 'train_NespressoCoffeeMachine_S1' in subDir or 'train_NespressoCoffeeMachine_S2' in subDir or 'train_Outdoor_S1' in subDir or 'train_PosterSession_S1' in subDir or 'train_PosterSession_S2' in subDir:
-#            continue
+        print(subDir)
         if 'train_BookShelf_S1' in subDir:
             continue
-        print(subDir)
         if 'train_' in subDir:
             newFolder = subDir
             os.chdir(var.root)
@@ -142,14 +135,12 @@ if __name__ == "__main__":
 
             print(newFolder, lastFolder)
             model_checkpoint = 'vision_checkpointAdam9CNN_' + test_folder[5:] + '.pth'
-            flownet_checkpoint = 'flownets_EPE1.951.pth.tar'
             # flownet_checkpoint = 'FlowNet2-SD_checkpoint.pth.tar'
 
             arg = 'del'
-            n_epochs = 10
-            toggle = 0
             trim_frame_size = 150
-            pipeline = VISION_PIPELINE(flownet_checkpoint)
+            pipeline = VISION_PIPELINE()
+            pipeline.tensorboard_folder = args.tfolder
             print(pipeline)
             optimizer = optimizer = optim.Adam([
                                     {'params': pipeline.net.parameters(), 'lr': 1e-4},
@@ -169,26 +160,20 @@ if __name__ == "__main__":
                 # pipeline.current_loss = checkpoint['loss']
                 print('Model loaded')
 
-            utils = Helpers(test_folder, reset_dataset=1)
+            utils = Helpers(test_folder, reset_dataset=args.reset_data)
             _, _, training_target, testing_target = utils.load_datasets()
 
             os.chdir(pipeline.var.root)
             print(torch.cuda.device_count())
-#            if torch.cuda.device_count() > 1:
-#               print("Let's use", torch.cuda.device_count(), "GPUs!")
-               # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
-#               model = nn.DataParallel(pipeline)
 
-#            model.to(device)
-
-            for epoch in tqdm(range(0, n_epochs), desc="epochs"):
+            for epoch in tqdm(range(args.sepoch, args.nepochs), desc="epochs"):
                 if epoch > 0:
                     utils = Helpers(test_folder, reset_dataset=0)
                     _, _, training_target, testing_target = utils.load_datasets()
 #                ttesting_target = np.copy(testing_target)
-                trainDataset = FINAL_DATASET('training_images', training_target)
+                trainDataset = VIS_FINAL_DATASET('training_images', training_target)
                 trainLoader = torch.utils.data.DataLoader(trainDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=0)
-                testDataset = FINAL_DATASET('testing_images', testing_target)
+                testDataset = VIS_FINAL_DATASET('testing_images', testing_target)
                 testLoader = torch.utils.data.DataLoader(testDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=0)
 
                 tqdm_trainLoader = tqdm(trainLoader)
@@ -206,8 +191,6 @@ if __name__ == "__main__":
                 for batch_index, (feat, labels) in enumerate(tqdm_trainLoader):
                     num_samples += feat.size(0)
                     labels = labels[:,0,:]
-                    # labels[:,0] *= 0.2667
-                    # labels[:,1] *= 0.3556
                     pred = pipeline(feat.float())
                     loss = criterion(pred, labels.float())
                     optimizer.zero_grad()

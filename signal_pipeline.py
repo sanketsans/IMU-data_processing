@@ -117,6 +117,13 @@ class IMU_PIPELINE(nn.Module):
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     var = RootVariables()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sepoch", type=int, default=0)
+    # parser.add_argument('--sepoch', action='store_true', help='Run model in pseudo-fp16 mode (fp16 storage fp32 math).')
+    parser.add_argument("--nepoch", type=int, default=15)
+    parser.add_argument("--tfolder", action='store', help='tensorboard_folder name')
+    args = parser.parse_args()
+
     # test_folder = 'test_InTheDeak_S2'
     lastFolder, newFolder = None, None
     for index, subDir in enumerate(sorted(os.listdir(var.root))):
@@ -136,16 +143,15 @@ if __name__ == "__main__":
                 _ = os.system('mv test_' + lastFolder[6:] + ' ' + lastFolder)
 
             print(newFolder, lastFolder)
-            model_checkpoint = 'vision_checkpointAdam9CNN_' + test_folder[5:] + '.pth'
-            flownet_checkpoint = 'flownets_EPE1.951.pth.tar'
+            model_checkpoint = 'signal_checkpointAdam9CNN_' + test_folder[5:] + '.pth'
             # flownet_checkpoint = 'FlowNet2-SD_checkpoint.pth.tar'
 
             arg = 'del'
-            n_epochs = 10
             trim_frame_size = 150
             pipeline = IMU_PIPELINE()
+            pipeline.tensorboard_folder = args.tfolder
             print(pipeline)
-            optimizer = optim.Adam(pipeline.parameters(), lr=0.01, amsgrad=True) #, momentum=0.9)
+            optimizer = optim.Adam(pipeline.parameters(), lr=0.0015, amsgrad=True) #, momentum=0.9)
             lambda1 = lambda epoch: 0.95 ** epoch
             scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda1)
             criterion = nn.SmoothL1Loss()
@@ -162,22 +168,16 @@ if __name__ == "__main__":
             imu_training, imu_testing, training_target, testing_target = utils.load_datasets()
             os.chdir(pipeline.var.root)
             print(torch.cuda.device_count())
-#            if torch.cuda.device_count() > 1:
-#               print("Let's use", torch.cuda.device_count(), "GPUs!")
-               # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
-#               model = nn.DataParallel(pipeline)
 
-#            model.to(device)
-
-            for epoch in tqdm(range(n_epochs), desc="epochs"):
+            for epoch in tqdm(range(args.sepoch, args.nepochs), desc="epochs"):
                 if epoch > 0:
                     utils = Helpers(test_folder, reset_dataset=0)
                     imu_training, imu_testing, training_target, testing_target = utils.load_datasets()
 
-                trainDataset = FINAL_DATASET(imu_training_feat, training_target)
+                trainDataset = SIG_FINAL_DATASET(imu_training_feat, training_target)
                 trainLoader = torch.utils.data.DataLoader(trainDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=0)
                 tqdm_trainLoader = tqdm(trainLoader)
-                testDataset = FINAL_DATASET(imu_testing_feat, testing_target)
+                testDataset = SIG_FINAL_DATASET(imu_testing_feat, testing_target)
                 testLoader = torch.utils.data.DataLoader(testDataset, shuffle=True, batch_size=pipeline.var.batch_size, drop_last=True, num_workers=0)
                 tqdm_testLoader = tqdm(testLoader)
 
@@ -202,20 +202,17 @@ if __name__ == "__main__":
                     with torch.no_grad():
                         pred, labels = pipeline.get_original_coordinates(pred, labels)
 
-                        dist = torch.cdist(pred, labels.float(), p=2)[0].unsqueeze(dim=0)
-                        if batch_index > 0:
-                            trainPD = torch.cat((trainPD, dist), 0)
-                        else:
-                            trainPD = dist
+                        # dist = torch.cdist(pred, labels.float(), p=2)[0].unsqueeze(dim=0)
+                        # if batch_index > 0:
+                        #     trainPD = torch.cat((trainPD, dist), 0)
+                        # else:
+                        #     trainPD = dist
 
                         total_loss.append(loss.detach().item())
                         total_correct += pipeline.get_num_correct(pred, labels.float())
                         total_accuracy = total_correct / num_samples
                         tqdm_trainLoader.set_description('training: ' + '_loss: {:.4} correct: {} accuracy: {:.3} MPD: {}'.format(
                             np.mean(total_loss), total_correct, 100.0*total_accuracy, torch.mean(trainPD)))
-
-                        # if batch_index % 10 :
-                        #     tb.add_scalar("Train Pixel Distance", torch.mean(trainPD[len(trainPD)-10:]), batch_index + (epoch*len(trainLoader)))
 
                 pipeline.eval()
                 with torch.no_grad():
@@ -236,12 +233,12 @@ if __name__ == "__main__":
                         pred = pipeline(feat.float()).to(device)
                         loss = criterion(pred, labels.float())
 
-                        pred, labels = pipeline.get_original_coordinates(pred, labels)
-                        dist = torch.cdist(pred, labels.float(), p=2)[0].unsqueeze(dim=0)
-                        if batch_index > 0:
-                            testPD = torch.cat((testPD, dist), 0)
-                        else:
-                            testPD = dist
+                        # pred, labels = pipeline.get_original_coordinates(pred, labels)
+                        # dist = torch.cdist(pred, labels.float(), p=2)[0].unsqueeze(dim=0)
+                        # if batch_index > 0:
+                        #     testPD = torch.cat((testPD, dist), 0)
+                        # else:
+                        #     testPD = dist
 
                         total_loss.append(loss.detach().item())
                         total_correct += pipeline.get_num_correct(pred, labels.float())
@@ -250,10 +247,6 @@ if __name__ == "__main__":
                         total_accuracy = total_correct / num_samples
                         tqdm_testLoader.set_description('testing: ' + '_loss: {:.4} correct: {} accuracy: {:.3} MPD: {} DAcc: {:.4}'.format(
                             np.mean(total_loss), total_correct, 100.0*total_accuracy, torch.mean(testPD), np.floor(100.0*dummy_accuracy)))
-
-                        # if batch_index % 10 :
-                        #     tb.add_scalar("Test Pixel Distance", torch.mean(testPD[len(testPD)-10:]), batch_index+(epoch*len(testLoader)))
-
 
                 tb.add_scalar("Testing Loss", np.mean(total_loss), epoch)
                 tb.add_scalar("Testing Accuracy", total_accuracy, epoch)
