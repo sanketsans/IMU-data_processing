@@ -91,67 +91,77 @@ class BUILDING_DATASETS:
             _ = os.system('mkdir ' + self.var.root + 'training_images')
             _ = os.system('mkdir ' + self.var.root + 'testing_images')
             train_frame_index, test_frame_index = 0, 0
-            for index, subDir in enumerate(tqdm(sorted(os.listdir(self.var.root)), desc="Building Image Dataset")):
-                if 'train_' in subDir:
+            trainpaths, testpaths = [], []
+            print("Building Image dataset ..")
+            tqdmloader = tqdm(sorted(os.listdir(self.var.root)))
+            for index, subDir in enumerate(tqdmloader):
+                if 'train_' in subDir :
+                    tqdmloader.set_description('Train folder: {}'.format(subDir))
+                    # _ = os.system('rm -r ' + self.var.root + 'training_images/' + subDir)
+                    _ = os.system('mkdir ' + self.var.root + 'training_images/' + subDir)
                     total_frames = 0
                     subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
                     os.chdir(self.var.root + subDir)
                     self.capture = cv2.VideoCapture(self.video_file)
                     self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                    print('Train: ', subDir)
-                    os.chdir(self.var.root + subDir)
-                    self.capture = cv2.VideoCapture(self.video_file)
-                    self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
-                    self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.var.trim_frame_size)
-                    self.ret, self.last = self.capture.read()
-                    # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.last)
-                    self.last = cv2.resize(self.last, (512, 384))
-                    total_frames = 1
-                    while total_frames != (self.frame_count - self.var.trim_frame_size*2):
-                        self.ret, self.train_new = self.capture.read()
-                        # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.train_new)
-                        self.train_new = cv2.resize(self.train_new, (512, 384))
-                        stacked = np.concatenate((self.last, self.train_new), axis=2)
-#                            torch.save(self.transforms(stacked), self.var.root + 'training_images/frames_' + str(train_frame_index) + '.pt')
-                        with open(self.var.root + 'training_images/frames_' + str(train_frame_index) + '.npy', 'wb') as f:
-                            np.save(f, stacked)
-                            f.close()
+                    self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.var.trim_frame_size - 8)
+                    for i in range(self.frame_count - (self.var.trim_frame_size*2) + 8): ## because we need frame no. 149 to stack with frame 150, to predict for frame no. 150
+                        _, frame = self.capture.read()
+                        frame = cv2.resize(frame, (512, 288)) # (512, 288)
+                        w, h = 224, 224
+                        center_x = frame.shape[1] / 2
+                        center_y = frame.shape[0] / 2
+                        x = center_x - w/2
+                        y = center_y - h/2
 
-                        total_frames += 1
+                        frame = frame[int(y):int(y+h), int(x):int(x+w)]
+
+                        # frame = cv2.resize(frame, (224, 224)) # (512, 288)
+                        # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        path = self.var.root + 'training_images/' + subDir + 'image_' + str(train_frame_index) + '.jpg'
+                        cv2.imwrite(path, frame)
+                        # self.create_clips(self.capture, train_frame_index, 'training_images')
                         train_frame_index += 1
-          #              self.train_stack_frames.append(stacked)
-                        self.last = self.train_new
+                        trainpaths.append(path)
 
                 if 'test_' in subDir:
+                    tqdmloader.set_description('Test folder: {}'.format(subDir))
+                    _ = os.system('mkdir ' + self.var.root + 'testing_images/' + subDir)
                     total_frames = 0
                     subDir  = subDir + '/' if subDir[-1]!='/' else  subDir
                     os.chdir(self.var.root + subDir)
                     self.capture = cv2.VideoCapture(self.video_file)
                     self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
-                    print('Test: ', subDir)
-                    os.chdir(self.var.root + subDir)
-                    self.capture = cv2.VideoCapture(self.video_file)
-                    self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
+#                       _ = os.system('rm ' + str(self.var.frame_size) + '_framesExtracted_data_' + str(self.var.trim_frame_size) + '.npy')
 
-                    self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.var.trim_frame_size)
-                    self.ret, self.last = self.capture.read()
-                    # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.last)
-                    self.last = cv2.resize(self.last, (512, 384))
-                    total_frames = 1
-                    while total_frames != (self.frame_count - self.var.trim_frame_size*2):
-                        self.ret, self.train_new = self.capture.read()
-                        # cv2.imwrite('images/frames_' + str(total_frames) + '.jpg', self.train_new)
-                        self.train_new = cv2.resize(self.train_new, (512, 384))
-                        stacked = np.concatenate((self.last, self.train_new), axis=2)
-#                            torch.save(self.transforms(stacked), self.var.root + 'testing_images/frames_' + str(train_frame_index) + '.pt')
-                        with open(self.var.root + 'testing_images/frames_' + str(test_frame_index) + '.npy', 'wb') as f:
-                            np.save(f, stacked)
-                            f.close()
+                    self.capture.set(cv2.CAP_PROP_POS_FRAMES,self.var.trim_frame_size - 8)
+                    for i in range(self.frame_count - (self.var.trim_frame_size*2) + 8): ## because we need frame no. 149 to stack with frame 150, to predict for frame no. 150
+                        _, frame = self.capture.read()
+                        frame = cv2.resize(frame, (512, 288)) # (398, 224)
+                        # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        w, h = 224, 224
+                        center_x = frame.shape[1] / 2
+                        center_y = frame.shape[0] / 2
+                        x = center_x - w/2
+                        y = center_y - h/2
 
-                        total_frames += 1
+                        frame = frame[int(y):int(y+h), int(x):int(x+w)]
+
+                        path = self.var.root + 'testing_images/' + subDir + 'image_' + str(test_frame_index) + '.jpg'
+                        cv2.imwrite(path, frame)
+                        # self.create_clips(self.capture, test_frame_index, 'testing_images')
                         test_frame_index += 1
-                        self.last = self.train_new
+                        testpaths.append(path)
+                    print(test_frame_index)
+
+            os.chdir(self.var.root)
+            dict = {'image_paths': trainpaths}
+            df = pd.DataFrame(dict)
+            df.to_csv(self.var.root + '/trainImg.csv')
+            dict = {'image_paths':testpaths}
+            df = pd.DataFrame(dict)
+            df.to_csv(self.var.root + '/testImg.csv')
 
     def populate_imu_data(self, subDir):
 
@@ -237,7 +247,7 @@ if __name__ == "__main__":
     # os.chdir(dataset_folder)
     dataframes = BUILDING_DATASETS('train_Lift_S1')
 
-    dataframes.load_unified_frame_dataset()
+    dataframes.load_unified_frame_dataset(reset_dataset=1)
 
     # trainIMU, testIMU = dataframes.load_unified_imu_dataset()
     # imu_datas= dataframes.load_unified_imu_dataset()

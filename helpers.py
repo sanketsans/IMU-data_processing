@@ -92,8 +92,9 @@ class Helpers:
     def __init__(self, test_folder, reset_dataset=0):
         self.var = RootVariables()
         self.test_folder = test_folder
-        _ = os.system('mkdir ' + self.var.root + 'datasets')
-        _ = os.system('mkdir ' + self.var.root + 'datasets/' + test_folder[5:])
+        if reset_dataset == 1:
+            _ = os.system('mkdir ' + self.var.root + 'datasets')
+            _ = os.system('mkdir ' + self.var.root + 'datasets/' + test_folder[5:])
         self.dataset = IMU_GAZE_FRAME_DATASET(self.test_folder, reset_dataset)
         self.train_imu_dataset, self.test_imu_dataset = self.dataset.imu_train_datasets, self.dataset.imu_test_datasets
         self.train_gaze_dataset, self.test_gaze_dataset = self.dataset.gaze_train_datasets, self.dataset.gaze_test_datasets
@@ -179,15 +180,15 @@ class Helpers:
                     self.gaze_start_index = self.gaze_end_index
                     self.imu_start_index = self.imu_end_index
 
-            # with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_training_feat_' + test_folder[5:-1] + '.npy', 'wb') as f:
-            #     np.save(f, imu_training_feat)
-            #     f.close()
+            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_training_feat_' + test_folder[5:-1] + '.npy', 'wb') as f:
+                np.save(f, imu_training_feat)
+                f.close()
             with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_imu_testing_feat_' + test_folder[5:-1] + '.npy', 'wb') as f:
                 np.save(f, imu_testing_feat)
                 f.close()
-            # with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_training_target_' + test_folder[5:-1] + '.npy', 'wb') as f:
-            #     np.save(f, training_target)
-            #     f.close()
+            with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_training_target_' + test_folder[5:-1] + '.npy', 'wb') as f:
+                np.save(f, training_target)
+                f.close()
             with open(self.var.root + 'datasets/' + test_folder[5:] + str(self.var.frame_size) + '_gaze_testing_target_' + test_folder[5:-1] + '.npy', 'wb') as f:
                 np.save(f, testing_target)
                 f.close()
